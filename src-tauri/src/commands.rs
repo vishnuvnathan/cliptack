@@ -15,9 +15,11 @@ use crate::paste::{self, PasteStatus};
 use crate::query;
 use crate::secret;
 use crate::settings::{self, Settings};
+use crate::shortcuts;
 use crate::startup;
 use crate::state::{AppState, SelfCopyGuard};
 use crate::transform::{self, Transform};
+use crate::tray;
 use crate::window;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -240,7 +242,10 @@ async fn hide_and_paste(app: &AppHandle) -> PasteStatus {
 /// an answer to that. The cost is that undo brings the entry back without its
 /// password -- which `restore_item` reports, so the UI can say so.
 #[tauri::command]
-pub async fn delete_item(state: State<'_, AppState>, id: String) -> CmdResult<bool> {
+pub async fn delete_item(
+    state: State<'_, AppState>,
+    id: String,
+) -> CmdResult<bool> {
     let item = queries::get(&state.db.pool, &id)
         .await
         .map_err(err("load failed"))?
@@ -317,17 +322,19 @@ pub async fn delete_matching(
         .await
         .map_err(err("password erase failed"))?;
 
-    queries::soft_delete_many(&state.db.pool, &ids)
+    let deleted = queries::soft_delete_many(&state.db.pool, &ids)
         .await
-        .map_err(err("delete failed"))
+        .map_err(err("delete failed"))?;
+    Ok(deleted)
 }
 
 /// Clears captured clipboard history. Notes, credentials and pinned clips stay.
 #[tauri::command]
 pub async fn clear_clip_history(state: State<'_, AppState>) -> CmdResult<u64> {
-    queries::clear_clip_history(&state.db.pool)
+    let cleared = queries::clear_clip_history(&state.db.pool)
         .await
-        .map_err(err("clear failed"))
+        .map_err(err("clear failed"))?;
+    Ok(cleared)
 }
 
 #[tauri::command]
@@ -420,6 +427,12 @@ pub fn set_settings(
         .app_config_dir()
         .map_err(err("no config dir"))?;
 
+    // Strict, and before `sanitize`: a shortcut the user just typed that does
+    // not parse has to come back as an error they can read, not be quietly
+    // swapped for the default.
+    let new_active = shortcuts::resolve(&settings)?;
+    settings.sanitize();
+
     // Window geometry belongs to the backend, which updates it on every hide.
     // The frontend's copy is a snapshot taken when the panel opened, so trusting
     // it here would revert a window the user moved since then.
@@ -434,21 +447,55 @@ pub fn set_settings(
         settings.window_y = current.window_y;
     }
 
+    // Shortcuts first: they are the step that can fail for reasons only the OS
+    // knows (another app owns the key). Everything after this point undoes them
+    // on failure, so a rejected save never leaves the keys rebound.
+    let old_active = *state
+        .shortcuts
+        .lock()
+        .map_err(|_| "shortcut lock poisoned".to_string())?;
+    shortcuts::reconcile(&app, &old_active, &new_active)?;
+    if let Ok(mut g) = state.shortcuts.lock() {
+        *g = new_active;
+    }
+    let rollback = |app: &AppHandle| {
+        let _ = shortcuts::reconcile(app, &new_active, &old_active);
+        if let Ok(mut g) = state.shortcuts.lock() {
+            *g = old_active;
+        }
+    };
+
     // Before the save, so a registry write that fails does not leave a stored
     // setting claiming something the OS is not going to do.
-    startup::apply(&app, settings.launch_on_startup)?;
+    if let Err(e) = startup::apply(&app, settings.launch_on_startup) {
+        rollback(&app);
+        return Err(e);
+    }
 
-    settings::save(&config_dir, &settings).map_err(err("could not write settings"))?;
+    if let Err(e) = settings::save(&config_dir, &settings) {
+        rollback(&app);
+        return Err(err("could not write settings")(e));
+    }
 
     if let Some(win) = window::panel(&app) {
         capture::apply(&win, settings.capture_exclusion);
     }
+
+    state
+        .capture_gate
+        .set_auto(settings.capture_mode == settings::CaptureMode::Auto);
+    tray::set_toggle_label(&app, &settings.toggle_shortcut);
 
     let mut guard = state
         .settings
         .lock()
         .map_err(|_| "settings lock poisoned".to_string())?;
     *guard = settings.clone();
+    drop(guard);
+
+    // Stickies run their own copy of the frontend, with no store shared with
+    // the panel; this is how a theme or accent change reaches them.
+    let _ = app.emit("settings-changed", &settings);
     Ok(settings)
 }
 

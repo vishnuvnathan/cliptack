@@ -107,7 +107,7 @@ export function CredentialEditor() {
         </h1>
         <button
           onClick={submit}
-          className="ml-auto rounded bg-accent px-3.5 py-1.5 text-[11.5px] font-semibold text-panel transition-opacity hover:opacity-90"
+          className="ml-auto rounded bg-accent px-3.5 py-1.5 text-[11.5px] font-semibold text-onaccent transition-opacity hover:opacity-90"
         >
           Save
         </button>
@@ -163,7 +163,7 @@ export function CredentialEditor() {
                   type="checkbox"
                   checked={clearPassword}
                   onChange={(e) => setClearPassword(e.target.checked)}
-                  className="h-3 w-3 accent-[#7aa2f7]"
+                  className="h-3 w-3 accent-accent"
                 />
                 Remove the stored password
               </label>

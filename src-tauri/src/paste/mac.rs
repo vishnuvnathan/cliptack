@@ -24,3 +24,10 @@ pub fn support() -> PasteStatus {
 pub fn paste_into_previous() -> PasteStatus {
     PasteStatus::unsupported(REASON)
 }
+
+/// Same reasoning as pasting: needs an Accessibility grant that cannot be
+/// verified from here. The capture shortcut still arms its window, so a manual
+/// copy inside it is saved.
+pub fn copy_selection() -> Result<(), String> {
+    Err("Sending a copy keystroke is not implemented on macOS; copy manually".to_string())
+}

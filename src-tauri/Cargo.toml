@@ -38,7 +38,7 @@ sqlx = { version = "0.8", default-features = false, features = [
 ] }
 
 arboard = { version = "3", features = ["image-data"] }
-image = { version = "0.25", default-features = false, features = ["png", "bmp"] }
+image = { version = "0.25", default-features = false, features = ["png", "bmp", "jpeg", "gif", "webp"] }
 
 uuid = { version = "1", features = ["v4"] }
 sha2 = "0.10"

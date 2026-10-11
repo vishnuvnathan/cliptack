@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { CredentialEditor } from "./components/CredentialEditor";
 import { FilterChips } from "./components/FilterChips";
+import { FolderMenu } from "./components/FolderMenu";
+import { HelpView } from "./components/HelpView";
 import { NoteEditor } from "./components/NoteEditor";
 import { PreviewPane } from "./components/PreviewPane";
+import { ResizeGrips } from "./components/ResizeGrips";
 import { ResultList } from "./components/ResultList";
 import { SearchBar } from "./components/SearchBar";
 import { Settings } from "./components/Settings";
 import { TransformMenu } from "./components/TransformMenu";
 import { UndoBar } from "./components/UndoBar";
 import { useHotkeys } from "./lib/hotkeys";
+import { useTheme } from "./lib/theme";
 import {
   hidePanel,
   onItemAdded,
@@ -17,7 +21,6 @@ import {
   onPanelOpened,
   startMove,
   startResize,
-  type ResizeDirection,
 } from "./lib/ipc";
 import { isCredential } from "./lib/types";
 import { useStash } from "./store/useStash";
@@ -27,6 +30,9 @@ export default function App() {
   const error = useStash((s) => s.error);
 
   useBackendEvents();
+  const theme = useStash((s) => s.settings?.theme);
+  const accent = useStash((s) => s.settings?.accent);
+  useTheme(theme, accent);
   usePanelHotkeys();
 
   return (
@@ -67,9 +73,11 @@ export default function App() {
       {view === "note" && <NoteEditor />}
       {view === "credential" && <CredentialEditor />}
       {view === "settings" && <Settings />}
+      {view === "help" && <HelpView />}
 
       <TransformMenu />
-      <ResizeGrips />
+      <FolderMenu />
+      <ResizeGrips start={(dir) => void startResize(dir)} />
 
       {/* Above the error banner: the undo offer is time-limited and the error
           is not, so the one you can still act on sits closest to the list. */}
@@ -105,6 +113,14 @@ function Footer() {
           deleting folders. Without it the tray menu is the sole discoverable
           path, since Ctrl+, is listed nowhere. */}
       <button
+        onClick={() => setView("help")}
+        title="All shortcuts (F1)"
+        aria-label="Keyboard shortcuts"
+        className="shrink-0 rounded px-1 leading-none text-zinc-600 transition-colors hover:text-zinc-300"
+      >
+        ?
+      </button>
+      <button
         onClick={() => setView("settings")}
         title="Settings (Ctrl+,)"
         aria-label="Settings"
@@ -113,41 +129,6 @@ function Footer() {
         ⚙
       </button>
     </div>
-  );
-}
-
-/**
- * The window is undecorated, so the OS draws no resize border. These invisible
- * strips along each edge supply one. They need
- * `core:window:allow-start-resize-dragging` in capabilities/default.json.
- */
-function ResizeGrips() {
-  const grip = (dir: ResizeDirection, className: string, cursor: string) => (
-    <div
-      key={dir}
-      onMouseDown={(e) => {
-        // Left button only, and never let the drag-region handler also fire.
-        if (e.button !== 0) return;
-        e.preventDefault();
-        e.stopPropagation();
-        void startResize(dir);
-      }}
-      className={`absolute z-50 ${className}`}
-      style={{ cursor }}
-    />
-  );
-
-  return (
-    <>
-      {grip("North", "left-3 right-3 top-0 h-1.5", "ns-resize")}
-      {grip("South", "bottom-0 left-3 right-3 h-1.5", "ns-resize")}
-      {grip("West", "bottom-3 left-0 top-3 w-1.5", "ew-resize")}
-      {grip("East", "bottom-3 right-0 top-3 w-1.5", "ew-resize")}
-      {grip("NorthWest", "left-0 top-0 h-3 w-3", "nwse-resize")}
-      {grip("NorthEast", "right-0 top-0 h-3 w-3", "nesw-resize")}
-      {grip("SouthWest", "bottom-0 left-0 h-3 w-3", "nesw-resize")}
-      {grip("SouthEast", "bottom-0 right-0 h-3.5 w-3.5", "nwse-resize")}
-    </>
   );
 }
 
@@ -205,6 +186,8 @@ function usePanelHotkeys() {
   const setFolder = useStash((s) => s.setFolder);
   const openTransforms = useStash((s) => s.openTransforms);
   const transformsOpen = useStash((s) => s.transforms !== null);
+  const openFolderMenu = useStash((s) => s.openFolderMenu);
+  const folderMenuOpen = useStash((s) => s.folderMenuOpen);
 
   const onEscape = useCallback(() => {
     void hidePanel();
@@ -253,7 +236,9 @@ function usePanelHotkeys() {
       onNewNote: () => openNote(null),
       onNewCredential: () => openCredential(null),
       onTransform: () => void openTransforms(),
+      onMoveToFolder: openFolderMenu,
       onSettings: () => setView("settings"),
+      onHelp: () => setView("help"),
       onPin: () => void pinSelected(),
       onCopyPassword: () => void copySelectedPassword(),
       onToggleReveal: () => void revealSelectedPassword(),
@@ -276,11 +261,12 @@ function usePanelHotkeys() {
       onEditSelected,
       onFolderDigit,
       openTransforms,
+      openFolderMenu,
     ],
   );
 
   // The note editor and settings own their own Escape and Ctrl+S handling, so
   // the global list bindings stand down while either is open. So does the
   // transform menu, which would otherwise have Up/Down move the list behind it.
-  useHotkeys(handlers, view === "list" && !transformsOpen);
+  useHotkeys(handlers, view === "list" && !transformsOpen && !folderMenuOpen);
 }

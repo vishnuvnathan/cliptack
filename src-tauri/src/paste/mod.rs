@@ -68,6 +68,16 @@ pub fn paste_into_previous() -> PasteStatus {
     platform::paste_into_previous()
 }
 
+/// Sends Ctrl+C (Cmd+C) to the focused window so the capture shortcut can copy
+/// the current selection. Blocks while the user releases the shortcut's own
+/// modifiers, so call it off the hotkey thread.
+///
+/// An `Err` means no keystroke was sent; the caller still has the clipboard
+/// gate armed, so a manual copy is picked up instead.
+pub fn copy_selection() -> Result<(), String> {
+    platform::copy_selection()
+}
+
 /// Whether this platform can paste at all, without attempting one. The settings
 /// panel uses it to describe the auto-paste toggle honestly rather than offering
 /// a switch that does nothing.

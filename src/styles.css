@@ -2,6 +2,66 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  Theme tokens, as space-separated RGB triplets so Tailwind can add alpha
+  (see tailwind.config.js). The values here are the dark theme -- the original
+  look -- so a build with no `data-theme` attribute at all still renders as
+  before. src/lib/theme.ts sets the attribute and overrides --c-accent.
+*/
+:root {
+  color-scheme: dark;
+  --c-panel: 22 22 26;
+  --c-panelalt: 29 29 34;
+  --c-edge: 42 42 49;
+  --c-accent: 122 162 247;
+  --c-onaccent: 22 22 26;
+  --c-zinc-100: 244 244 245;
+  --c-zinc-200: 228 228 231;
+  --c-zinc-300: 212 212 216;
+  --c-zinc-400: 161 161 170;
+  --c-zinc-500: 113 113 122;
+  --c-zinc-600: 82 82 91;
+  --c-zinc-700: 63 63 70;
+  --c-zinc-800: 39 39 42;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --c-panel: 252 252 253;
+  --c-panelalt: 242 242 245;
+  --c-edge: 218 218 224;
+  --c-onaccent: 255 255 255;
+  --c-zinc-100: 24 24 27;
+  --c-zinc-200: 39 39 42;
+  --c-zinc-300: 63 63 70;
+  --c-zinc-400: 82 82 91;
+  --c-zinc-500: 99 99 108;
+  --c-zinc-600: 124 124 134;
+  --c-zinc-700: 161 161 170;
+  --c-zinc-800: 228 228 231;
+}
+
+/*
+  The few non-grey colours the UI uses for warnings and errors are tuned for a
+  dark surface and wash out on white. Matched by whole class token ([class~=])
+  so a `hover:text-red-300` on a grey button does not turn it red permanently.
+*/
+:root[data-theme="light"] [class~="text-red-300"],
+:root[data-theme="light"] [class~="text-red-400"] {
+  color: #b91c1c;
+}
+:root[data-theme="light"] .hover\:text-red-300:hover,
+:root[data-theme="light"] .hover\:text-red-400:hover {
+  color: #b91c1c;
+}
+:root[data-theme="light"] [class~="text-amber-300"],
+:root[data-theme="light"] [class~="text-amber-400/90"],
+:root[data-theme="light"] [class~="text-amber-400/80"],
+:root[data-theme="light"] [class~="text-amber-400/70"],
+:root[data-theme="light"] [class~="text-amber-500/80"] {
+  color: #92400e;
+}
+
 @layer base {
   html,
   body,
@@ -17,13 +77,13 @@
     width: 10px;
   }
   ::-webkit-scrollbar-thumb {
-    background: #2a2a31;
+    background: rgb(var(--c-edge));
     border-radius: 6px;
     border: 3px solid transparent;
     background-clip: content-box;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #3a3a44;
+    background: rgb(var(--c-zinc-700));
     background-clip: content-box;
   }
 }
@@ -33,7 +93,7 @@
      pulling in a typography plugin for one view. */
   .prose-stash :is(h1, h2, h3) {
     font-weight: 600;
-    color: #e4e4e7;
+    color: rgb(var(--c-zinc-200));
     margin: 0.75em 0 0.35em;
   }
   .prose-stash h1 { font-size: 1.25em; }
@@ -45,22 +105,22 @@
   .prose-stash code {
     font-family: theme("fontFamily.mono");
     font-size: 0.9em;
-    background: #1d1d22;
+    background: rgb(var(--c-panelalt));
     padding: 0.1em 0.3em;
     border-radius: 3px;
   }
   .prose-stash pre {
-    background: #1d1d22;
+    background: rgb(var(--c-panelalt));
     padding: 0.75em;
     border-radius: 6px;
     overflow-x: auto;
   }
   .prose-stash pre code { background: none; padding: 0; }
-  .prose-stash a { color: #7aa2f7; }
+  .prose-stash a { color: rgb(var(--c-accent)); }
   .prose-stash blockquote {
-    border-left: 2px solid #2a2a31;
+    border-left: 2px solid rgb(var(--c-edge));
     padding-left: 0.75em;
-    color: #a1a1aa;
+    color: rgb(var(--c-zinc-400));
   }
 }
 

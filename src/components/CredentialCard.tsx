@@ -58,7 +58,7 @@ export function CredentialCard({ item }: Props) {
           <button
             onClick={() => void copyPassword()}
             title="Copy password (Ctrl+Shift+C)"
-            className="h-8 shrink-0 rounded-md bg-accent px-2.5 text-[11px] font-semibold text-panel transition-opacity hover:opacity-90"
+            className="h-8 shrink-0 rounded-md bg-accent px-2.5 text-[11px] font-semibold text-onaccent transition-opacity hover:opacity-90"
           >
             Copy
           </button>

@@ -15,7 +15,7 @@ import {
   type TypeChipId,
 } from "../lib/types";
 
-export type View = "list" | "note" | "credential" | "settings";
+export type View = "list" | "note" | "credential" | "settings" | "help";
 
 /**
  * What the undo bar needs. `secretErased` is carried because a deleted
@@ -92,6 +92,10 @@ interface StashState {
   renameFolder: (id: string, name: string) => Promise<void>;
   deleteFolder: (id: string) => Promise<void>;
   assignSelectedToFolder: (folderId: string | null) => Promise<void>;
+  /** The "move to folder" menu (Ctrl+M). */
+  folderMenuOpen: boolean;
+  openFolderMenu: () => void;
+  closeFolderMenu: () => void;
 
   openCredential: (id: string | null) => void;
   saveCredential: (draft: Omit<CredentialDraft, "id">) => Promise<void>;
@@ -105,7 +109,15 @@ interface StashState {
   setView: (v: View) => void;
 
   loadSettings: () => Promise<void>;
-  updateSettings: (patch: Partial<Settings>) => Promise<void>;
+  /**
+   * Resolves to the error message when the backend rejected the change (and the
+   * previous settings were restored), or null on success. `quiet` keeps that
+   * message out of the global error banner for callers that show it inline.
+   */
+  updateSettings: (
+    patch: Partial<Settings>,
+    opts?: { quiet?: boolean },
+  ) => Promise<string | null>;
 
   bootstrap: () => Promise<void>;
 }
@@ -151,6 +163,7 @@ export const useStash = create<StashState>((set, get) => ({
 
   folders: [],
   activeFolderId: null,
+  folderMenuOpen: false,
 
   revealedPassword: null,
   transforms: null,
@@ -527,9 +540,18 @@ export const useStash = create<StashState>((set, get) => ({
     }
   },
 
+  openFolderMenu() {
+    if (get().items[get().selected]) set({ folderMenuOpen: true, error: null });
+  },
+
+  closeFolderMenu() {
+    if (get().folderMenuOpen) set({ folderMenuOpen: false });
+  },
+
   async assignSelectedToFolder(folderId) {
     const { items, selected } = get();
     const item = items[selected];
+    set({ folderMenuOpen: false });
     if (!item) return;
     try {
       await ipc.setItemFolder(item.id, folderId);
@@ -636,15 +658,18 @@ export const useStash = create<StashState>((set, get) => ({
     }
   },
 
-  async updateSettings(patch) {
+  async updateSettings(patch, opts) {
     const current = get().settings;
-    if (!current) return;
+    if (!current) return null;
     const next = { ...current, ...patch };
     set({ settings: next });
     try {
       set({ settings: await ipc.setSettings(next) });
+      return null;
     } catch (e) {
-      set({ settings: current, error: String(e) });
+      const message = String(e);
+      set(opts?.quiet ? { settings: current } : { settings: current, error: message });
+      return message;
     }
   },
 

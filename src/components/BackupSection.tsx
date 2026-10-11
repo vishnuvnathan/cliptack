@@ -95,7 +95,7 @@ export function BackupSection() {
             type="checkbox"
             checked={includeSecrets}
             onChange={(e) => setIncludeSecrets(e.target.checked)}
-            className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[#7aa2f7]"
+            className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-accent"
           />
           <span className="text-[11px] leading-4 text-zinc-400">
             Include passwords in plain text

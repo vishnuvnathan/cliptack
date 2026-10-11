@@ -14,8 +14,8 @@ use std::time::{Duration, Instant};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VIRTUAL_KEY,
-    VK_CONTROL, VK_V,
+    GetAsyncKeyState, SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP,
+    VIRTUAL_KEY, VK_C, VK_CONTROL, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT, VK_V,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     GetForegroundWindow, GetWindowThreadProcessId, IsWindow, SetForegroundWindow,
@@ -150,20 +150,52 @@ fn key(vk: VIRTUAL_KEY, up: bool) -> INPUT {
 /// Ctrl down, V down, V up, Ctrl up -- in one `SendInput` call so nothing can
 /// interleave between the modifier and the key.
 fn send_paste() -> Result<(), String> {
+    // The usual cause of a failure is UIPI: a window running elevated will not
+    // accept synthetic input from a process that is not.
+    if send_ctrl_chord(VK_V) {
+        Ok(())
+    } else {
+        Err("Windows blocked the keystroke (an elevated window?); the item is on your clipboard"
+            .to_string())
+    }
+}
+
+fn send_ctrl_chord(vk: VIRTUAL_KEY) -> bool {
     let inputs = [
         key(VK_CONTROL, false),
-        key(VK_V, false),
-        key(VK_V, true),
+        key(vk, false),
+        key(vk, true),
         key(VK_CONTROL, true),
     ];
 
     let sent = unsafe { SendInput(&inputs, std::mem::size_of::<INPUT>() as i32) };
-    if sent as usize == inputs.len() {
+    sent as usize == inputs.len()
+}
+
+fn modifiers_held() -> bool {
+    [VK_CONTROL, VK_MENU, VK_SHIFT, VK_LWIN, VK_RWIN]
+        .iter()
+        .any(|vk| unsafe { GetAsyncKeyState(vk.0 as i32) } as u16 & 0x8000 != 0)
+}
+
+/// Copies the selection in the focused window for the capture shortcut.
+///
+/// The shortcut that triggered this is still physically held when it fires.
+/// Sending Ctrl+C on top of a held Ctrl+Alt would arrive as Ctrl+Alt+C -- the
+/// capture shortcut itself -- and either retrigger it or be read by the target
+/// app as something else entirely. So wait until every modifier is up, and if
+/// they never are, send nothing rather than guess.
+pub fn copy_selection() -> Result<(), String> {
+    let deadline = Instant::now() + Duration::from_millis(600);
+    while modifiers_held() {
+        if Instant::now() >= deadline {
+            return Err("modifier keys were still held; release them and try again".to_string());
+        }
+        std::thread::sleep(POLL_STEP);
+    }
+    if send_ctrl_chord(VK_C) {
         Ok(())
     } else {
-        // The usual cause is UIPI: a window running elevated will not accept
-        // synthetic input from a process that is not.
-        Err("Windows blocked the keystroke (an elevated window?); the item is on your clipboard"
-            .to_string())
+        Err("Windows blocked the keystroke (an elevated window?)".to_string())
     }
 }

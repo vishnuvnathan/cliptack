@@ -20,3 +20,10 @@ pub fn support() -> PasteStatus {
 pub fn paste_into_previous() -> PasteStatus {
     PasteStatus::unsupported(REASON)
 }
+
+/// Same reasoning as pasting: no portable way to synthesise Ctrl+C into another
+/// client. The capture shortcut still arms its window, so a manual copy inside
+/// it is saved.
+pub fn copy_selection() -> Result<(), String> {
+    Err("Sending a copy keystroke is not supported on Linux; copy manually".to_string())
+}

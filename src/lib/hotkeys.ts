@@ -21,7 +21,11 @@ export interface HotkeyHandlers {
   onNewCredential: () => void;
   /** Ctrl+T: open the "paste as" menu for the selection. */
   onTransform: () => void;
+  /** Ctrl+M: open the "move to folder" menu for the selection. */
+  onMoveToFolder: () => void;
   onSettings: () => void;
+  /** F1 or Ctrl+/: show the shortcut reference. */
+  onHelp: () => void;
   onPin: () => void;
   onCopyPassword: () => void;
   onToggleReveal: () => void;
@@ -59,6 +63,10 @@ export function useHotkeys(handlers: HotkeyHandlers, enabled: boolean) {
           e.preventDefault();
           if (mod) handlers.onCopyOnly();
           else handlers.onEnter();
+          return;
+        case "F1":
+          e.preventDefault();
+          handlers.onHelp();
           return;
         case "Escape":
           e.preventDefault();
@@ -123,9 +131,17 @@ export function useHotkeys(handlers: HotkeyHandlers, enabled: boolean) {
           e.preventDefault();
           handlers.onTransform();
           break;
+        case "m":
+          e.preventDefault();
+          handlers.onMoveToFolder();
+          break;
         case ",":
           e.preventDefault();
           handlers.onSettings();
+          break;
+        case "/":
+          e.preventDefault();
+          handlers.onHelp();
           break;
         case "z":
           // preventDefault only on the branch that handled it, so Ctrl+Z with

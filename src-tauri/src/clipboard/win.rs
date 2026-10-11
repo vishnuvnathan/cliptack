@@ -8,6 +8,7 @@
 use super::types::{PollState, Snapshot};
 use once_cell::sync::Lazy;
 use std::ffi::c_void;
+use std::path::PathBuf;
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{CloseHandle, HANDLE, HGLOBAL};
 use windows::Win32::System::DataExchange::{
@@ -22,6 +23,7 @@ use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThre
 
 const CF_UNICODETEXT: u32 = 13;
 const CF_DIB: u32 = 8;
+const CF_HDROP: u32 = 15;
 
 /// Set by password managers and anything else that must not be recorded.
 /// Registering once is enough -- the atom is process-wide and stable.
@@ -95,7 +97,128 @@ pub fn poll(state: &mut PollState) -> Snapshot {
         }
     }
 
+    // A file copied in Explorer carries only a path (CF_HDROP), never pixels.
+    // Last in the chain, so an app that offers real text or image data is
+    // always preferred over the file it happens to be backed by.
+    if unsafe { IsClipboardFormatAvailable(CF_HDROP) }.is_ok() {
+        if let Some(path) = read_single_dropped_file() {
+            // Reading a picture off disk can be slow (a network share, a
+            // sleeping drive). The clipboard is a shared lock, so let go of it
+            // first -- the path is all that was needed from it.
+            drop(_guard);
+            if let Some(png) = super::image_file_to_png(&path) {
+                return Snapshot::Image(png);
+            }
+        }
+    }
+
     Snapshot::Unsupported
+}
+
+/// The one file on the clipboard, if there is exactly one. Several files are
+/// deliberately not recorded: a folder copy would otherwise become a pile of
+/// unrelated history entries.
+fn read_single_dropped_file() -> Option<PathBuf> {
+    let handle = unsafe { GetClipboardData(CF_HDROP) }.ok()?;
+    let mut files = with_global(handle, |ptr, size| {
+        parse_dropfiles(unsafe { std::slice::from_raw_parts(ptr, size) })
+    })?;
+    if files.len() == 1 {
+        files.pop()
+    } else {
+        None
+    }
+}
+
+/// Reads the paths out of a DROPFILES block: a 20-byte header (offset of the
+/// list, a POINT, and two flags, the last being "paths are UTF-16") followed by
+/// NUL-separated paths and an empty string as terminator.
+fn parse_dropfiles(bytes: &[u8]) -> Option<Vec<PathBuf>> {
+    let u32_at = |o: usize| -> Option<u32> {
+        Some(u32::from_le_bytes(bytes.get(o..o + 4)?.try_into().ok()?))
+    };
+    let start = u32_at(0)? as usize;
+    let wide = u32_at(16)? != 0;
+    let list = bytes.get(start..)?;
+
+    let mut paths = Vec::new();
+    if wide {
+        let units: Vec<u16> = list
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
+        for part in units.split(|&u| u == 0) {
+            if part.is_empty() {
+                break;
+            }
+            paths.push(PathBuf::from(String::from_utf16_lossy(part)));
+        }
+    } else {
+        for part in list.split(|&b| b == 0) {
+            if part.is_empty() {
+                break;
+            }
+            paths.push(PathBuf::from(String::from_utf8_lossy(part).into_owned()));
+        }
+    }
+    Some(paths)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dropfiles(paths: &[&str], wide: bool) -> Vec<u8> {
+        let mut out = vec![0u8; 20];
+        out[0..4].copy_from_slice(&20u32.to_le_bytes());
+        out[16..20].copy_from_slice(&(wide as u32).to_le_bytes());
+        for p in paths {
+            if wide {
+                for u in p.encode_utf16() {
+                    out.extend_from_slice(&u.to_le_bytes());
+                }
+                out.extend_from_slice(&[0, 0]);
+            } else {
+                out.extend_from_slice(p.as_bytes());
+                out.push(0);
+            }
+        }
+        out.extend_from_slice(if wide { &[0, 0] } else { &[0] });
+        out
+    }
+
+    #[test]
+    fn parses_one_wide_path() {
+        let block = dropfiles(&[r"C:\Users\Me\Pictures\cat.png"], true);
+        assert_eq!(
+            parse_dropfiles(&block).unwrap(),
+            vec![PathBuf::from(r"C:\Users\Me\Pictures\cat.png")]
+        );
+    }
+
+    #[test]
+    fn parses_several_paths_and_non_ascii() {
+        let block = dropfiles(&[r"C:\a\é.png", r"C:\b\ü.jpg"], true);
+        assert_eq!(parse_dropfiles(&block).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn parses_ansi_lists() {
+        let block = dropfiles(&[r"C:\a\b.png"], false);
+        assert_eq!(parse_dropfiles(&block).unwrap(), vec![PathBuf::from(r"C:\a\b.png")]);
+    }
+
+    #[test]
+    fn truncated_or_empty_blocks_do_not_panic() {
+        assert!(parse_dropfiles(&[]).is_none());
+        assert!(parse_dropfiles(&[0u8; 10]).is_none());
+        // Header claims the list starts past the end of the buffer.
+        let mut bad = vec![0u8; 20];
+        bad[0..4].copy_from_slice(&999u32.to_le_bytes());
+        assert!(parse_dropfiles(&bad).is_none());
+        // Valid header, nothing after it.
+        assert_eq!(parse_dropfiles(&dropfiles(&[], true)).unwrap().len(), 0);
+    }
 }
 
 /// Locks an HGLOBAL and hands the bytes to `f`. Unlock always runs; its error

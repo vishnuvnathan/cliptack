@@ -48,7 +48,7 @@ step into a dependency, set `debug = true` there and expect the space back.
 
 | Key | Action |
 |---|---|
-| `Ctrl+Shift+V` / `Cmd+Shift+V` | show or hide the panel, from anywhere |
+| `Ctrl+Shift+V` / `Cmd+Shift+V` | show or hide the panel, from anywhere (rebindable in settings) |
 | `↑` / `↓` | move the selection |
 | `Enter` | paste the selected item into the window you came from |
 | `Ctrl+Enter` | copy it to the clipboard without pasting |
@@ -59,12 +59,35 @@ step into a dependency, set `debug = true` there and expect the space back.
 | `Ctrl+N` | new note |
 | `Ctrl+K` | new credential |
 | `Ctrl+Shift+C` | copy the selected credential's password |
+| `Ctrl+M` | move the selected item to a folder (or create one) |
 | `Alt+1`…`9` | filter by folder (`Alt+0` clears) |
 | `Ctrl+,` | settings |
 | `Esc` | hide the panel |
 
 Clicking away hides the panel. Closing the window hides it too — the tray menu's
 **Quit** is the only thing that ends the process.
+
+### Appearance, shortcuts and what gets saved
+
+All in **Settings**.
+
+- **Theme** — Dark (the default), Light, or System, which follows the Windows
+  setting live. The accent colour is one of six presets or any `#rrggbb`. On the
+  light theme the accent is darkened so it stays readable as text.
+- **Open shortcut** — click the field and press the combination you want. It must
+  include Ctrl, Alt or Shift. If the key is refused (another app owns it, or it
+  matches the capture shortcut) the old binding stays in force and the reason is
+  shown under the field. Keys another app has registered globally never reach
+  the field at all, and neither do Stash's own current shortcuts.
+- **What Stash saves** — *Everything I copy* is the default. *Only what I choose*
+  ignores ordinary Ctrl+C entirely: select something and press the capture
+  shortcut (`Ctrl+Alt+C` by default) and Stash copies it and keeps exactly that
+  one item. With nothing selected nothing is saved. On macOS and Linux Stash
+  cannot send the copy keystroke for you, so press the shortcut first and then
+  copy within a couple of seconds. Anything a password manager marks private is
+  never saved in either mode.
+- **Image files** — copying a single `.png`, `.jpg`, `.gif`, `.bmp` or `.webp`
+  file in Explorer saves it as an image clip. Several files at once are ignored.
 
 ## Searching
 
@@ -256,7 +279,7 @@ Checked by running the app, not by reading the code:
 | Image capture | CF_DIB converted to PNG, sharded blob on disk, hash stored |
 | Idle CPU | **0.000%** over 30s across ~75 poll ticks, 31.8 MB resident |
 | Capture exclusion | `GetWindowDisplayAffinity` returns `0x11` (`WDA_EXCLUDEFROMCAPTURE`, not the degraded fallback); a screen capture taken while the window was verifiably visible contains no trace of it |
-| Global shortcut | Ctrl+Shift+V shows and hides the panel |
+| Global shortcut | Ctrl+Shift+V shows and hides the panel (default; rebindable, see above) |
 | Hide on blur | panel hides within ~100ms of losing focus |
 | FTS5 search | a query narrowed 9 items to the 2 matching rows, ranked |
 | Notes | Ctrl+N, edit, Ctrl+S persists `kind='note'`, `content_type='markdown'`, title derived from the first line |

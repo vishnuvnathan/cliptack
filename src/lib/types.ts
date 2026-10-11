@@ -99,6 +99,9 @@ export interface TransformOption {
   label: string;
 }
 
+export type ThemeMode = "dark" | "light" | "system";
+export type CaptureMode = "auto" | "shortcut";
+
 export interface Settings {
   captureExclusion: boolean;
   launchOnStartup: boolean;
@@ -109,6 +112,13 @@ export interface Settings {
   windowHeight: number | null;
   windowX: number | null;
   windowY: number | null;
+  theme: ThemeMode;
+  accent: string;
+  /** Global shortcut that shows/hides the panel, e.g. "Ctrl+Shift+KeyV". */
+  toggleShortcut: string;
+  captureMode: CaptureMode;
+  /** Global shortcut that copies the selection and saves it (captureMode "shortcut"). */
+  captureShortcut: string;
 }
 
 export interface CaptureStatus {

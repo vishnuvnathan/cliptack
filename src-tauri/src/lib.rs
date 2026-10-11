@@ -9,28 +9,17 @@ mod paste;
 mod query;
 mod secret;
 mod settings;
+mod shortcuts;
 mod startup;
 mod state;
 mod transform;
 mod tray;
 mod window;
 
-use state::{AppState, PasswordClipboard, SelfCopyGuard};
+use state::{AppState, CaptureGate, PasswordClipboard, SelfCopyGuard};
 use std::sync::Mutex;
 use tauri::{Manager, WindowEvent};
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
-
-const TOGGLE_KEY: Code = Code::KeyV;
-
-fn toggle_shortcut() -> Shortcut {
-    // CmdOrCtrl+Shift+V: Cmd on macOS, Ctrl elsewhere.
-    #[cfg(target_os = "macos")]
-    let modifiers = Modifiers::SUPER | Modifiers::SHIFT;
-    #[cfg(not(target_os = "macos"))]
-    let modifiers = Modifiers::CONTROL | Modifiers::SHIFT;
-
-    Shortcut::new(Some(modifiers), TOGGLE_KEY)
-}
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -41,8 +30,6 @@ pub fn run() {
         )
         .init();
 
-    let shortcut = toggle_shortcut();
-
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(
@@ -51,10 +38,12 @@ pub fn run() {
         ))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(move |app, received, event| {
+                .with_handler(|app, received, event| {
                     // Fire on press only; the release event would toggle straight back.
-                    if received == &shortcut && event.state() == ShortcutState::Pressed {
-                        window::toggle(app);
+                    // Which shortcut it was is decided from live state, because
+                    // the user can rebind them while the app is running.
+                    if event.state() == ShortcutState::Pressed {
+                        shortcuts::on_pressed(app, received);
                     }
                 })
                 .build(),
@@ -67,18 +56,26 @@ pub fn run() {
 
             let loaded = settings::load(&config_dir);
 
+            // `load` has already repaired anything unparsable, so this can only
+            // fail if the built-in defaults are themselves broken.
+            let active = shortcuts::resolve(&loaded)
+                .map_err(|e| format!("invalid shortcut settings: {e}"))?;
+
             // The database must exist before the watcher or any command runs,
             // so this one step is intentionally blocking.
             let db = tauri::async_runtime::block_on(db::init(&data_dir))
                 .map_err(|e| format!("database init failed: {e}"))?;
 
             let self_copy = SelfCopyGuard::default();
+            let capture_gate = CaptureGate::new(loaded.capture_mode == settings::CaptureMode::Auto);
 
             app.manage(AppState {
                 db: db.clone(),
                 settings: Mutex::new(loaded.clone()),
                 self_copy: self_copy.clone(),
                 password_clipboard: PasswordClipboard::default(),
+                capture_gate: capture_gate.clone(),
+                shortcuts: Mutex::new(active),
             });
 
             // Secrets written before encryption landed are still plaintext in
@@ -100,7 +97,7 @@ pub fn run() {
             startup::reconcile(&handle, loaded.launch_on_startup);
             paste::warn_if_unsupported();
 
-            tray::build(&handle)?;
+            tray::build(&handle, &loaded.toggle_shortcut)?;
 
             if let Some(win) = window::panel(&handle) {
                 let status = capture::apply(&win, loaded.capture_exclusion);
@@ -111,9 +108,20 @@ pub fn run() {
                 }
             }
 
-            app.global_shortcut().register(toggle_shortcut())?;
+            // A key another app already owns must not stop Stash from starting:
+            // the tray menu still opens the panel, and Settings can pick a
+            // different combination.
+            let gs = app.global_shortcut();
+            if let Err(e) = gs.register(active.toggle) {
+                tracing::warn!(error = %e, "open-panel shortcut could not be registered");
+            }
+            if let Some(capture) = active.capture {
+                if let Err(e) = gs.register(capture) {
+                    tracing::warn!(error = %e, "capture shortcut could not be registered");
+                }
+            }
 
-            clipboard::spawn(handle.clone(), db.clone(), self_copy);
+            clipboard::spawn(handle.clone(), db.clone(), self_copy, capture_gate);
             db::retention::spawn(db);
 
             // No Dock icon on macOS; skipTaskbar covers Windows and Linux.
@@ -122,23 +130,28 @@ pub fn run() {
 
             Ok(())
         })
-        .on_window_event(|win, event| match event {
-            // Closing must not quit: the tray Quit item is the only exit.
-            WindowEvent::CloseRequested { api, .. } => {
-                api.prevent_close();
-                hide_panel_window(win);
+        .on_window_event(|win, event| {
+            if win.label() != window::PANEL {
+                return;
             }
-            // Clicking away dismisses the panel, which is also the Linux
-            // mitigation for having no capture exclusion. A move or resize
-            // drag blurs the webview too, and that one must not dismiss it.
-            WindowEvent::Focused(false) => {
-                if !window::drag_in_progress() && !window::dialog_open() {
+            match event {
+                // Closing must not quit: the tray Quit item is the only exit.
+                WindowEvent::CloseRequested { api, .. } => {
+                    api.prevent_close();
                     hide_panel_window(win);
                 }
+                // Clicking away dismisses the panel, which is also the Linux
+                // mitigation for having no capture exclusion. A move or resize
+                // drag blurs the webview too, and that one must not dismiss it.
+                WindowEvent::Focused(false) => {
+                    if !window::drag_in_progress() && !window::dialog_open() {
+                        hide_panel_window(win);
+                    }
+                }
+                // Focus comes back when the drag loop ends.
+                WindowEvent::Focused(true) => window::disarm_drag_guard(),
+                _ => {}
             }
-            // Focus comes back when the drag loop ends.
-            WindowEvent::Focused(true) => window::disarm_drag_guard(),
-            _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             commands::search_items,

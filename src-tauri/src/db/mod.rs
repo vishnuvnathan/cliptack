@@ -146,7 +146,13 @@ mod tests {
         let names: Vec<String> = names.into_iter().map(|(n,)| n).collect();
         assert_eq!(
             names,
-            ["0001_init", "0002_fts", "0003_folders", "0004_secrets", "0005_power"]
+            [
+                "0001_init",
+                "0002_fts",
+                "0003_folders",
+                "0004_secrets",
+                "0005_power",
+            ]
         );
     }
 

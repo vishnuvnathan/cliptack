@@ -17,6 +17,7 @@ export function PreviewPane() {
   const items = useStash((s) => s.items);
   const selected = useStash((s) => s.selected);
   const folders = useStash((s) => s.folders);
+  const openFolderMenu = useStash((s) => s.openFolderMenu);
 
   const item = items[selected];
 
@@ -52,16 +53,17 @@ export function PreviewPane() {
             used {item.useCount}×
           </span>
         )}
-        {folder && (
-          <span
-            className={[
-              "shrink-0 truncate text-[11px] text-zinc-500",
-              item.useCount > 0 ? "" : "ml-auto",
-            ].join(" ")}
-          >
-            {folder.name}
-          </span>
-        )}
+        <button
+          onClick={openFolderMenu}
+          title="Move to folder (Ctrl+M)"
+          className={[
+            "shrink-0 truncate text-[11px] hover:text-zinc-200",
+            folder ? "text-zinc-500" : "text-zinc-600",
+            item.useCount > 0 ? "" : "ml-auto",
+          ].join(" ")}
+        >
+          {folder ? folder.name : "Add to folder"}
+        </button>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
@@ -100,6 +102,7 @@ function Body({ item }: { item: Item }) {
 /** Same object-URL discipline as the row thumbnails: revoked on unmount. */
 function ImageBody({ relPath }: { relPath: string }) {
   const [url, setUrl] = useState<string | null>(null);
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,7 +123,25 @@ function ImageBody({ relPath }: { relPath: string }) {
   }, [relPath]);
 
   if (!url) return <div className="h-32 rounded border border-edge bg-panelalt" />;
-  return <img src={url} alt="" className="max-h-full max-w-full rounded object-contain" />;
+  return (
+    <div>
+      <img
+        src={url}
+        alt=""
+        onLoad={(e) =>
+          setSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })
+        }
+        className="max-h-full max-w-full rounded object-contain"
+      />
+      {/* The pixel size of what is on the clipboard, which the scaled-down
+          preview cannot show. */}
+      {size && (
+        <p className="mt-2 text-[11px] tabular-nums text-zinc-500">
+          {size.w} × {size.h} px
+        </p>
+      )}
+    </div>
+  );
 }
 
 function Hints({ item }: { item: Item }) {
@@ -132,16 +153,19 @@ function Hints({ item }: { item: Item }) {
         ["↵", "username"],
         ["Ctrl+⇧+C", "password"],
         ["Ctrl+⇧+E", "edit"],
+        ["Ctrl+M", "folder"],
         ["Ctrl+⌫", "delete"],
       ]
     : item.kind === "note"
       ? [
           ["↵", "copy"],
           ["Ctrl+⇧+E", "edit"],
+          ["Ctrl+M", "folder"],
           ["Ctrl+⌫", "delete"],
         ]
       : [
           ["↵", "copy"],
+          ["Ctrl+M", "folder"],
           ["Ctrl+⌫", "delete"],
         ];
 
