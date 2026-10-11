@@ -124,18 +124,26 @@ function ImageBody({ relPath }: { relPath: string }) {
 }
 
 function Hints({ item }: { item: Item }) {
+  // Delete is on every variant. It is the one action with a consequence, and
+  // the row's ✕ only shows on hover -- a keyboard user would otherwise never
+  // meet it.
   const hints = isCredential(item)
     ? [
         ["↵", "username"],
         ["Ctrl+⇧+C", "password"],
         ["Ctrl+⇧+E", "edit"],
+        ["Ctrl+⌫", "delete"],
       ]
     : item.kind === "note"
       ? [
           ["↵", "copy"],
           ["Ctrl+⇧+E", "edit"],
+          ["Ctrl+⌫", "delete"],
         ]
-      : [["↵", "copy"]];
+      : [
+          ["↵", "copy"],
+          ["Ctrl+⌫", "delete"],
+        ];
 
   return (
     <div className="flex shrink-0 items-center gap-3 border-t border-edge px-4 py-2 text-[11px] text-zinc-500">

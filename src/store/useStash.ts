@@ -9,12 +9,23 @@ import {
   type Filters,
   type Folder,
   type Item,
+  type MatchCount,
   type Settings,
   type TransformOption,
   type TypeChipId,
 } from "../lib/types";
 
 export type View = "list" | "note" | "credential" | "settings";
+
+/**
+ * What the undo bar needs. `secretErased` is carried because a deleted
+ * credential's password is gone immediately and cannot be restored — the offer
+ * has to say that up front rather than surprise the user after they take it.
+ */
+export interface DeletedItem {
+  item: Item;
+  secretErased: boolean;
+}
 
 interface StashState {
   query: string;
@@ -51,6 +62,22 @@ interface StashState {
   copySelected: () => Promise<void>;
   pasteSelected: () => Promise<void>;
   deleteSelected: () => Promise<void>;
+  deleteById: (id: string) => Promise<void>;
+
+  /**
+   * The one item an undo would bring back, or null when there is nothing on
+   * offer. Deliberately single: this is the "I just pressed the wrong key"
+   * escape hatch, not a history stack.
+   */
+  lastDeleted: DeletedItem | null;
+  undoDelete: () => Promise<void>;
+  dismissUndo: () => void;
+
+  /** Bulk paths. Both confirm in the UI first; neither is undoable. */
+  countMatching: () => Promise<MatchCount | null>;
+  deleteMatching: () => Promise<number>;
+  clearClipHistory: () => Promise<number>;
+  afterBulkDelete: () => Promise<void>;
 
   /** The "paste as" menu: null when closed, a list of options when open. */
   transforms: TransformOption[] | null;
@@ -127,6 +154,7 @@ export const useStash = create<StashState>((set, get) => ({
 
   revealedPassword: null,
   transforms: null,
+  lastDeleted: null,
 
   settings: null,
 
@@ -312,18 +340,132 @@ export const useStash = create<StashState>((set, get) => ({
     const { items, selected } = get();
     const item = items[selected];
     if (!item) return;
+    await get().deleteById(item.id);
+  },
+
+  /**
+   * Deletes by id so the row's ✕ and the keyboard both land here, and so the
+   * action's identity is stable enough to hand to a memoised row.
+   */
+  async deleteById(id) {
+    const { items, selected } = get();
+    const index = items.findIndex((i) => i.id === id);
+    const item = items[index];
+    if (!item) return;
+
     // Drop it locally first: the row is gone from the user's point of view the
     // moment they press the key, and the query would return the same result.
+    //
+    // The cursor stays on whatever it was pointing at. Deleting *above* the
+    // selection shifts everything up, so the index has to follow; deleting the
+    // selected row itself leaves the index alone, which lands on the row that
+    // slid into its place -- delete-delete-delete walks down the list, which is
+    // the whole reason the binding exists. Only the last row clamps.
+    const remaining = items.length - 1;
+    const next = index < selected ? selected - 1 : selected;
     set({
-      items: items.filter((i) => i.id !== item.id),
-      selected: Math.min(selected, Math.max(0, items.length - 2)),
+      items: items.filter((i) => i.id !== id),
+      selected: Math.max(0, Math.min(next, remaining - 1)),
     });
+
     try {
-      await ipc.deleteItem(item.id);
+      const secretErased = await ipc.deleteItem(id);
+      set({ lastDeleted: { item, secretErased } });
     } catch (e) {
-      set({ error: String(e) });
+      set({ error: String(e), lastDeleted: null });
       void get().refresh();
     }
+  },
+
+  async undoDelete() {
+    const pending = get().lastDeleted;
+    if (!pending) return;
+    // Cleared up front: a failed restore must not leave the offer standing for
+    // a second attempt that would fail the same way.
+    set({ lastDeleted: null });
+    try {
+      const restored = await ipc.restoreItem(pending.item.id);
+      if (!restored) {
+        set({ error: "That item is past the 24-hour window and cannot be restored" });
+        return;
+      }
+      await get().refresh();
+    } catch (e) {
+      set({ error: String(e) });
+    }
+  },
+
+  dismissUndo() {
+    if (get().lastDeleted !== null) set({ lastDeleted: null });
+  },
+
+  async countMatching() {
+    const { query, typeChips, activeSourceApps, activeFolderId } = get();
+    try {
+      return await ipc.countMatching(
+        query,
+        buildFilters(typeChips, activeSourceApps, activeFolderId),
+      );
+    } catch (e) {
+      set({ error: String(e) });
+      return null;
+    }
+  },
+
+  /**
+   * Deletes everything the current view matches. Rust re-resolves the set from
+   * the same query and filters rather than taking a list of ids from here, so
+   * what goes is what the list was showing -- including anything past the
+   * display cap that was never rendered.
+   */
+  async deleteMatching() {
+    const { query, typeChips, activeSourceApps, activeFolderId } = get();
+    try {
+      const deleted = await ipc.deleteMatching(
+        query,
+        buildFilters(typeChips, activeSourceApps, activeFolderId),
+      );
+      await get().afterBulkDelete();
+      return deleted;
+    } catch (e) {
+      set({ error: String(e) });
+      return 0;
+    }
+  },
+
+  async clearClipHistory() {
+    try {
+      const deleted = await ipc.clearClipHistory();
+      await get().afterBulkDelete();
+      return deleted;
+    } catch (e) {
+      set({ error: String(e) });
+      return 0;
+    }
+  },
+
+  /**
+   * The source-app chips are derived from live rows, so a bulk delete can leave
+   * them offering apps with nothing behind them. Refreshing both is what keeps
+   * the filter row honest. The undo offer goes too -- it names a single item,
+   * and after a bulk delete that is the wrong thing to point at.
+   */
+  async afterBulkDelete() {
+    set({ lastDeleted: null, selected: 0 });
+    await Promise.all([
+      get().refresh(),
+      ipc
+        .listSourceApps()
+        .then((sourceApps) =>
+          set((s) => ({
+            sourceApps,
+            // Drop any active chip whose app no longer exists, or the list
+            // would filter to nothing with no visible cause.
+            activeSourceApps: s.activeSourceApps.filter((a) => sourceApps.includes(a)),
+          })),
+        )
+        .catch(() => undefined),
+    ]);
   },
 
   async pinSelected() {
@@ -400,7 +542,12 @@ export const useStash = create<StashState>((set, get) => ({
   /* -- credentials -------------------------------------------------------- */
 
   openCredential(id) {
-    set({ view: "credential", editingCredentialId: id, revealedPassword: null });
+    set({
+      view: "credential",
+      editingCredentialId: id,
+      revealedPassword: null,
+      lastDeleted: null,
+    });
   },
 
   async saveCredential(draft) {
@@ -460,7 +607,7 @@ export const useStash = create<StashState>((set, get) => ({
   },
 
   openNote(id) {
-    set({ view: "note", editingNoteId: id, revealedPassword: null });
+    set({ view: "note", editingNoteId: id, revealedPassword: null, lastDeleted: null });
   },
 
   async saveNote(title, content) {
@@ -474,8 +621,11 @@ export const useStash = create<StashState>((set, get) => ({
     }
   },
 
+  // Leaving the list drops the undo offer along with the revealed password: it
+  // names a row in a list you are no longer looking at, and Ctrl+Z belongs to
+  // the editor once one is open.
   setView(v) {
-    set({ view: v, revealedPassword: null });
+    set({ view: v, revealedPassword: null, lastDeleted: null });
   },
 
   async loadSettings() {

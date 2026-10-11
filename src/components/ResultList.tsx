@@ -21,6 +21,7 @@ export function ResultList() {
   const copySelected = useStash((s) => s.copySelected);
   const openNote = useStash((s) => s.openNote);
   const openCredential = useStash((s) => s.openCredential);
+  const deleteById = useStash((s) => s.deleteById);
 
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -86,6 +87,7 @@ export function ResultList() {
                 active={row.index === selected}
                 onClick={() => select(row.index)}
                 onDoubleClick={() => activate(row.index)}
+                onDelete={deleteById}
               />
             </div>
           );

@@ -88,12 +88,79 @@ export function Settings() {
 
         <CredentialSecurityNote encrypted={security?.secretsEncrypted ?? null} />
 
+        <HistorySection />
+
         <div className="mt-5 border-t border-edge pt-3 text-[11px] leading-5 text-zinc-600">
-          <p>Stash keeps the newest 1000 unpinned clips. Pinned items, notes and credentials are never pruned.</p>
-          <p className="mt-1">
-            Everything stays on this machine. Stash makes no network requests.
-          </p>
+          <p>Everything stays on this machine. Stash makes no network requests.</p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The retention rules, stated, plus the button that applies them now.
+ *
+ * Paired deliberately: the paragraph explaining what is pruned automatically is
+ * exactly the explanation the button needs, and splitting them would mean
+ * writing the same sentence twice.
+ *
+ * No undo here. The undo bar carries a single item; this is a few hundred, and
+ * a confirm reporting a real count is the honest trade. The 24-hour grace
+ * window still applies underneath — nothing is unlinked from disk immediately.
+ */
+function HistorySection() {
+  const clearClipHistory = useStash((s) => s.clearClipHistory);
+  const [confirming, setConfirming] = useState(false);
+  const [cleared, setCleared] = useState<number | null>(null);
+
+  return (
+    <div className="mt-5 border-t border-edge pt-3">
+      <h2 className="text-[13px] text-zinc-200">History</h2>
+      <p className="mt-1 text-[11px] leading-4 text-zinc-600">
+        Stash keeps the newest 1000 unpinned clips. Pinned items, notes and
+        credentials are never pruned — and clearing below leaves them too.
+      </p>
+
+      <div className="mt-2 flex items-center gap-2">
+        {confirming ? (
+          <>
+            <span className="text-[11px] text-zinc-500">Delete all captured clips?</span>
+            <button
+              onClick={() => {
+                setConfirming(false);
+                void clearClipHistory().then(setCleared);
+              }}
+              className="text-[11px] text-red-400 hover:text-red-300"
+            >
+              Clear
+            </button>
+            <button
+              onClick={() => setConfirming(false)}
+              className="text-[11px] text-zinc-500 hover:text-zinc-200"
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={() => {
+              setCleared(null);
+              setConfirming(true);
+            }}
+            className="rounded border border-edge px-2 py-1 text-[11px] text-zinc-400 transition-colors hover:border-red-900 hover:text-red-400"
+          >
+            Clear clip history
+          </button>
+        )}
+
+        {cleared !== null && (
+          <span className="text-[11px] text-zinc-500">
+            {cleared === 0
+              ? "Nothing to clear."
+              : `Cleared ${cleared} clip${cleared === 1 ? "" : "s"}.`}
+          </span>
+        )}
       </div>
     </div>
   );

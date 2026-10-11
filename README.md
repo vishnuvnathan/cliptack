@@ -54,6 +54,7 @@ step into a dependency, set `debug = true` there and expect the space back.
 | `Ctrl+Enter` | copy it to the clipboard without pasting |
 | `Ctrl+T` | "paste as" — transform the selection on the way out |
 | `Ctrl+Backspace` | delete the selected item |
+| `Ctrl+Z` | undo that delete |
 | `Ctrl+P` | pin or unpin |
 | `Ctrl+N` | new note |
 | `Ctrl+K` | new credential |
@@ -309,6 +310,37 @@ external-content table kept in sync by triggers.
 
 Image clips are written to `<app data>/blobs/<first two hash chars>/<hash>.png`
 and deduplicated by hash, so copying the same screenshot twice stores one file.
+
+## Deleting
+
+Nothing is deleted outright. `Ctrl+Backspace`, or the ✕ that appears when you
+hover a row, sets `deleted_at` and drops the row out of every query; retention
+hard-deletes it 24 hours later and unlinks its blob if no other row still points
+at the same file.
+
+That window is what `Ctrl+Z` reaches. There is no confirmation dialog on a single
+delete, deliberately: a confirm taxes every delete to catch the rare wrong one,
+which is the wrong trade for a panel driven at speed from the keyboard. The undo
+offer costs nothing until you need it, and stands for eight seconds.
+
+Two bulk operations, both confirmed inline rather than undoable:
+
+| Where | What it takes |
+|---|---|
+| **Delete these**, on the filter row | everything the current search and filters match — the same set the list is showing, resolved through the same SQL |
+| **Clear clip history**, in settings | captured clips only; notes, credentials and pinned items stay |
+
+"Delete these" appears only once the view is narrowed by a query or a chip, and
+counts in SQL rather than counting the rows on screen — search is capped, so the
+visible list routinely understates what would go. Pinned items inside the match
+are counted and reported, not silently spared: you narrowed the view, and
+quietly exempting part of what it shows would be its own surprise.
+
+The one thing that is not recoverable is a password. Deleting a credential erases
+its `item_secrets` row immediately rather than letting it sit encrypted for the
+grace period — deleting a credential is a request to be rid of the password, and
+"gone tomorrow" is not an answer to that. Undo brings the entry back without it,
+and says so before you take the offer.
 
 ## Credentials
 

@@ -1,4 +1,4 @@
-use super::model::{now_millis, Filters, Folder, Item, NewItem};
+use super::model::{now_millis, Filters, Folder, Item, MatchCount, NewItem};
 use anyhow::Result;
 use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool};
 
@@ -109,19 +109,7 @@ pub async fn search(
     let trimmed = query.trim();
     let mut qb: QueryBuilder<Sqlite> = QueryBuilder::new("SELECT ");
     qb.push(ITEM_COLS);
-
-    if trimmed.is_empty() {
-        qb.push(" FROM items WHERE items.deleted_at IS NULL");
-    } else {
-        qb.push(
-            " FROM items JOIN items_fts ON items_fts.rowid = items.rowid \
-             WHERE items_fts MATCH ",
-        );
-        qb.push_bind(fts_query(trimmed));
-        qb.push(" AND items.deleted_at IS NULL");
-    }
-
-    push_filters(&mut qb, filters);
+    push_source_and_filters(&mut qb, trimmed, filters);
 
     // `sort:used` overrides both default orders. Pinned still leads: pinning is
     // an explicit instruction and outranks any inferred ranking.
@@ -145,6 +133,33 @@ pub async fn search(
         out.push(Item::from_row(row)?);
     }
     Ok(out)
+}
+
+/// The FROM and WHERE behind every question asked of the item table: what to
+/// list, how many there are, and which rows a bulk delete takes.
+///
+/// `query` must already be trimmed and residual (operators lifted out by
+/// `crate::query::parse`). Callers supply only their own SELECT list and, if
+/// they want one, an ORDER BY.
+///
+/// Extracted rather than duplicated because a bulk delete that matched a
+/// different set than the list it was launched from would remove rows the user
+/// never saw. Agreement here is not a tidiness argument, it is the safety
+/// property -- and `delete_matching_agrees_with_search` in the tests below
+/// asserts it rather than trusting it.
+fn push_source_and_filters(qb: &mut QueryBuilder<Sqlite>, query: &str, filters: &Filters) {
+    if query.is_empty() {
+        qb.push(" FROM items WHERE items.deleted_at IS NULL");
+    } else {
+        qb.push(
+            " FROM items JOIN items_fts ON items_fts.rowid = items.rowid \
+             WHERE items_fts MATCH ",
+        );
+        qb.push_bind(fts_query(query));
+        qb.push(" AND items.deleted_at IS NULL");
+    }
+
+    push_filters(qb, filters);
 }
 
 /// Both search paths push these onto a query that already has a WHERE, and both
@@ -252,6 +267,119 @@ pub async fn soft_delete(pool: &SqlitePool, id: &str) -> Result<()> {
         .execute(pool)
         .await?;
     Ok(())
+}
+
+/// Undoes a soft delete, if the row is still there to undo.
+///
+/// `deleted_at IS NOT NULL` in the predicate is what makes the return value
+/// meaningful: `false` means retention already hard-deleted the row past its
+/// grace window, and the caller must say so rather than report a restore that
+/// did not happen. It also makes a double undo a no-op instead of silently
+/// bumping `updated_at` on a live item and reshuffling the list.
+pub async fn restore(pool: &SqlitePool, id: &str) -> Result<bool> {
+    let res = sqlx::query(
+        "UPDATE items SET deleted_at = NULL, updated_at = ?1
+         WHERE id = ?2 AND deleted_at IS NOT NULL",
+    )
+    .bind(now_millis())
+    .bind(id)
+    .execute(pool)
+    .await?;
+    Ok(res.rows_affected() > 0)
+}
+
+/// How many live rows match, and how many of those are pinned.
+pub async fn count_matching(
+    pool: &SqlitePool,
+    query: &str,
+    filters: &Filters,
+) -> Result<MatchCount> {
+    let mut qb: QueryBuilder<Sqlite> =
+        QueryBuilder::new("SELECT COUNT(*), COALESCE(SUM(items.pinned), 0)");
+    push_source_and_filters(&mut qb, query.trim(), filters);
+
+    let row = qb.build().fetch_one(pool).await?;
+    Ok(MatchCount { total: row.try_get(0)?, pinned: row.try_get(1)? })
+}
+
+/// The ids of every live row matching, unbounded by the display limit.
+///
+/// Bulk delete resolves ids first and updates second rather than issuing one
+/// `UPDATE ... WHERE id IN (SELECT ...)`. Two reasons, both about `items_fts`:
+/// the `items_au` trigger rewrites the FTS row on every UPDATE, so an update to
+/// `items` whose own subquery is reading `items_fts` depends on the planner
+/// choosing to materialise that subquery; and the caller needs the id list
+/// anyway, to erase the secret of any credential in it.
+pub async fn matching_ids(
+    pool: &SqlitePool,
+    query: &str,
+    filters: &Filters,
+) -> Result<Vec<String>> {
+    let mut qb: QueryBuilder<Sqlite> = QueryBuilder::new("SELECT items.id");
+    push_source_and_filters(&mut qb, query.trim(), filters);
+
+    let rows = qb.build().fetch_all(pool).await?;
+    rows.iter().map(|r| r.try_get::<String, _>(0)).collect::<Result<_, _>>().map_err(Into::into)
+}
+
+/// SQLite's bound-parameter ceiling is 32766 on current builds and 999 on older
+/// ones. Chunking well under the lower figure means a "clear everything matching
+/// `type:text`" over a full history is not a runtime failure.
+const ID_CHUNK: usize = 500;
+
+pub async fn soft_delete_many(pool: &SqlitePool, ids: &[String]) -> Result<u64> {
+    let now = now_millis();
+    let mut affected = 0;
+
+    for chunk in ids.chunks(ID_CHUNK) {
+        let mut qb: QueryBuilder<Sqlite> = QueryBuilder::new("UPDATE items SET deleted_at = ");
+        qb.push_bind(now);
+        qb.push(", updated_at = ");
+        qb.push_bind(now);
+        qb.push(" WHERE deleted_at IS NULL AND id IN (");
+        let mut sep = qb.separated(", ");
+        for id in chunk {
+            sep.push_bind(id.clone());
+        }
+        qb.push(")");
+        affected += qb.build().execute(pool).await?.rows_affected();
+    }
+
+    Ok(affected)
+}
+
+/// Erases the stored secret for every id given. Ids that are not credentials
+/// match nothing, so the caller does not have to sort them out first.
+pub async fn delete_secrets_for(pool: &SqlitePool, ids: &[String]) -> Result<()> {
+    for chunk in ids.chunks(ID_CHUNK) {
+        let mut qb: QueryBuilder<Sqlite> =
+            QueryBuilder::new("DELETE FROM item_secrets WHERE item_id IN (");
+        let mut sep = qb.separated(", ");
+        for id in chunk {
+            sep.push_bind(id.clone());
+        }
+        qb.push(")");
+        qb.build().execute(pool).await?;
+    }
+    Ok(())
+}
+
+/// Soft-deletes the captured clipboard history and nothing else.
+///
+/// The predicate is the one `retention::trim_overflow` already enforces on a
+/// timer, so this is the same pruning the app does anyway, on demand and without
+/// the 1000-item threshold. Notes, credentials and pinned clips are not history
+/// -- they were typed or kept deliberately -- and survive.
+pub async fn clear_clip_history(pool: &SqlitePool) -> Result<u64> {
+    let now = now_millis();
+    let res = sqlx::query(
+        "UPDATE items SET deleted_at = ?1, updated_at = ?1
+         WHERE kind = 'clip' AND pinned = 0 AND deleted_at IS NULL",
+    )
+    .bind(now)
+    .execute(pool)
+    .await?;
+    Ok(res.rows_affected())
 }
 
 /// Records that an item was actually used -- copied or pasted *out* of Stash.

@@ -16,6 +16,7 @@ import type {
   ExportReport,
   ImportReport,
   Item,
+  MatchCount,
   PasteStatus,
   SecurityInfo,
   Settings,
@@ -61,8 +62,39 @@ export async function pasteItem(id: string, transform?: string): Promise<PasteSt
   return invoke<PasteStatus>("paste_item", { id, transform: transform ?? null });
 }
 
-export async function deleteItem(id: string): Promise<void> {
-  return invoke<void>("delete_item", { id });
+/**
+ * Soft delete. Resolves with whether the item was a credential whose password
+ * was erased on the spot — an undo cannot bring that back, and the caller has to
+ * say so rather than imply a full restore.
+ */
+export async function deleteItem(id: string): Promise<boolean> {
+  return invoke<boolean>("delete_item", { id });
+}
+
+/** Undo a delete. `null` means the grace window closed and the row is really gone. */
+export async function restoreItem(id: string): Promise<Item | null> {
+  return invoke<Item | null>("restore_item", { id });
+}
+
+/**
+ * How many live items the current query and filters match, counted in SQL —
+ * `searchItems` is capped, so the list on screen is not the answer.
+ */
+export async function countMatching(query: string, filters: Filters): Promise<MatchCount> {
+  return invoke<MatchCount>("count_matching", { query, filters });
+}
+
+/**
+ * Deletes everything the current view matches, resolving with the count taken.
+ * Any credential in the set loses its password immediately, as with `deleteItem`.
+ */
+export async function deleteMatching(query: string, filters: Filters): Promise<number> {
+  return invoke<number>("delete_matching", { query, filters });
+}
+
+/** Clears captured clips. Notes, credentials and pinned items are untouched. */
+export async function clearClipHistory(): Promise<number> {
+  return invoke<number>("clear_clip_history");
 }
 
 export async function togglePin(id: string, pinned: boolean): Promise<void> {

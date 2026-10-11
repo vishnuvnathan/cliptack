@@ -8,6 +8,14 @@ export interface HotkeyHandlers {
   /** Ctrl+Enter: put it on the clipboard without pasting. */
   onCopyOnly: () => void;
   onDelete: () => void;
+  /**
+   * Ctrl+Z: undo the last delete. Returns whether there was one to undo --
+   * when there was not, the press has to reach the search box and undo typing
+   * instead. Same instinct as the plain-Backspace fall-through below: the panel
+   * is one keydown listener over a focused input, so every binding it does not
+   * need has to be handed back.
+   */
+  onUndo: () => boolean;
   onEscape: () => void;
   onNewNote: () => void;
   onNewCredential: () => void;
@@ -118,6 +126,11 @@ export function useHotkeys(handlers: HotkeyHandlers, enabled: boolean) {
         case ",":
           e.preventDefault();
           handlers.onSettings();
+          break;
+        case "z":
+          // preventDefault only on the branch that handled it, so Ctrl+Z with
+          // nothing deleted still undoes typing in the search box.
+          if (handlers.onUndo()) e.preventDefault();
           break;
       }
     };

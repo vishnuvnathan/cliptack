@@ -215,6 +215,186 @@ mod tests {
         assert_eq!(reloaded.folder_id, None, "item should be unfiled, not destroyed");
     }
 
+    /* -- delete, undo, and bulk delete -------------------------------------- */
+
+    /// Undo has to put the row back where the list will find it again -- a
+    /// restore that clears `deleted_at` but leaves the item unsearchable would
+    /// look exactly like a delete that worked.
+    #[tokio::test]
+    async fn a_deleted_item_can_be_restored() {
+        let (db, _dir) = fresh_db().await;
+        let item = queries::insert_item(&db.pool, clip("Cutover plan", "transport"), 1)
+            .await
+            .expect("insert");
+
+        queries::soft_delete(&db.pool, &item.id).await.expect("delete");
+        assert!(search_titles(&db, "", &model::Filters::default()).await.is_empty());
+
+        assert!(queries::restore(&db.pool, &item.id).await.expect("restore"));
+        assert_eq!(search_titles(&db, "", &model::Filters::default()).await, ["Cutover plan"]);
+        // Both search paths, because the FTS triggers rewrite the index row on
+        // every UPDATE and a restore is an UPDATE.
+        assert_eq!(search_titles(&db, "transport", &model::Filters::default()).await.len(), 1);
+
+        // Undoing twice must not silently bump `updated_at` on a live row and
+        // reshuffle the list.
+        assert!(!queries::restore(&db.pool, &item.id).await.expect("second restore"));
+    }
+
+    /// Past the grace window the row is really gone, and `restore` has to say so
+    /// rather than report a success the user cannot see.
+    #[tokio::test]
+    async fn restoring_a_purged_item_reports_failure() {
+        let (db, _dir) = fresh_db().await;
+        let item = queries::insert_item(&db.pool, clip("Gone", "body"), 1).await.expect("insert");
+
+        queries::soft_delete(&db.pool, &item.id).await.expect("delete");
+        // Backdate the tombstone past the 24h window retention enforces.
+        sqlx::query("UPDATE items SET deleted_at = 1 WHERE id = ?1")
+            .bind(&item.id)
+            .execute(&db.pool)
+            .await
+            .expect("backdate");
+
+        retention::run_once(&db).await.expect("retention pass");
+
+        assert!(
+            !queries::restore(&db.pool, &item.id).await.expect("restore"),
+            "a hard-deleted row must not report a successful restore"
+        );
+        assert!(queries::get(&db.pool, &item.id).await.expect("get").is_none());
+    }
+
+    /// The safety property behind `push_source_and_filters`: a bulk delete must
+    /// take exactly the set the list it was launched from was showing. If these
+    /// two ever diverge, the button deletes things the user never saw.
+    #[tokio::test]
+    async fn bulk_delete_matches_exactly_what_search_returns() {
+        let (db, _dir) = fresh_db().await;
+        let folder = queries::create_folder(&db.pool, "Work").await.expect("folder");
+
+        let filed = queries::insert_item(&db.pool, clip("filed", "transport alpha"), 1)
+            .await
+            .expect("a");
+        queries::set_item_folder(&db.pool, &filed.id, Some(&folder.id)).await.expect("file it");
+        queries::insert_item(&db.pool, clip("loose", "transport beta"), 2).await.expect("b");
+        queries::insert_item(&db.pool, clip("unrelated", "nothing"), 3).await.expect("c");
+
+        let in_work = model::Filters { folder_ids: vec![folder.id.clone()], ..Default::default() };
+
+        // Checked on both search paths, since they build different FROM clauses.
+        for query in ["", "transport"] {
+            let found: Vec<String> = queries::search(&db.pool, query, &in_work, 100, 0)
+                .await
+                .expect("search")
+                .into_iter()
+                .map(|i| i.id)
+                .collect();
+            let doomed = queries::matching_ids(&db.pool, query, &in_work).await.expect("ids");
+            assert_eq!(found, doomed, "bulk delete and search disagreed on `{query}`");
+        }
+
+        let count = queries::count_matching(&db.pool, "transport", &in_work).await.expect("count");
+        assert_eq!(count.total, 1);
+
+        let ids = queries::matching_ids(&db.pool, "transport", &in_work).await.expect("ids");
+        assert_eq!(queries::soft_delete_many(&db.pool, &ids).await.expect("delete"), 1);
+
+        // The other two rows are untouched, and the deleted one is unreachable.
+        let left = search_titles(&db, "", &model::Filters::default()).await;
+        assert_eq!(left, ["unrelated", "loose"]);
+    }
+
+    /// Pinned rows are counted so the confirm can report them, not excluded.
+    #[tokio::test]
+    async fn bulk_delete_counts_pinned_rows_separately() {
+        let (db, _dir) = fresh_db().await;
+        let kept = queries::insert_item(&db.pool, clip("pinned", "alpha"), 1).await.expect("a");
+        queries::insert_item(&db.pool, clip("plain", "alpha"), 2).await.expect("b");
+        queries::set_pinned(&db.pool, &kept.id, true).await.expect("pin");
+
+        let count = queries::count_matching(&db.pool, "", &model::Filters::default())
+            .await
+            .expect("count");
+        assert_eq!((count.total, count.pinned), (2, 1));
+    }
+
+    /// Clearing history is the one bulk action with a fixed predicate, and what
+    /// it spares is the whole point: anything the user typed or kept on purpose.
+    #[tokio::test]
+    async fn clearing_history_spares_notes_credentials_and_pins() {
+        let (db, _dir) = fresh_db().await;
+
+        queries::insert_item(&db.pool, clip("captured", "alpha"), 1).await.expect("clip");
+        let pinned = queries::insert_item(&db.pool, clip("pinned clip", "alpha"), 2)
+            .await
+            .expect("clip");
+        queries::set_pinned(&db.pool, &pinned.id, true).await.expect("pin");
+
+        let note = NewItem {
+            kind: ItemKind::Note,
+            content_type: ContentType::Markdown,
+            content: Some("written by hand".into()),
+            blob_path: None,
+            hash: None,
+            source_app: None,
+            title: Some("a note".into()),
+            folder_id: None,
+        };
+        queries::insert_item(&db.pool, note, 3).await.expect("note");
+
+        let cleared = queries::clear_clip_history(&db.pool).await.expect("clear");
+        assert_eq!(cleared, 1, "only the unpinned captured clip should go");
+
+        let mut left = search_titles(&db, "", &model::Filters::default()).await;
+        left.sort();
+        assert_eq!(left, ["a note", "pinned clip"]);
+    }
+
+    /// Deleting a credential erases the password immediately rather than leaving
+    /// it encrypted in `item_secrets` until the hard delete a day later.
+    /// `delete_secrets_for` takes the whole matched set, so it has to ignore ids
+    /// that are not credentials rather than choke on them.
+    #[tokio::test]
+    async fn deleting_a_credential_erases_its_secret_at_once() {
+        let (db, _dir) = fresh_db().await;
+
+        let cred = queries::insert_item(
+            &db.pool,
+            NewItem {
+                kind: ItemKind::Note,
+                content_type: ContentType::Credential,
+                content: Some(r#"{"username":"vnathan"}"#.to_string()),
+                blob_path: None,
+                hash: None,
+                source_app: None,
+                title: Some("SAP Production".to_string()),
+                folder_id: None,
+            },
+            1,
+        )
+        .await
+        .expect("insert");
+        queries::upsert_secret(&db.pool, &cred.id, "Hunter2-VerifyMe", "none")
+            .await
+            .expect("store secret");
+        let plain = queries::insert_item(&db.pool, clip("plain", "alpha"), 2).await.expect("clip");
+
+        assert!(queries::has_secret(&db.pool, &cred.id).await.expect("has"));
+
+        queries::delete_secrets_for(&db.pool, &[cred.id.clone(), plain.id.clone()])
+            .await
+            .expect("erase");
+
+        assert!(
+            !queries::has_secret(&db.pool, &cred.id).await.expect("has"),
+            "the password outlived the delete"
+        );
+        // And the entry itself is still restorable -- only the password is gone.
+        queries::soft_delete(&db.pool, &cred.id).await.expect("delete");
+        assert!(queries::restore(&db.pool, &cred.id).await.expect("restore"));
+    }
+
     /// Create-or-get: typing the name of an existing folder returns that folder.
     #[tokio::test]
     async fn creating_an_existing_folder_name_is_idempotent() {

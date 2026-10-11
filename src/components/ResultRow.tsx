@@ -20,6 +20,9 @@ interface Props {
   active: boolean;
   onClick: () => void;
   onDoubleClick: () => void;
+  /** Takes the id rather than closing over the row, so the store action can be
+      passed straight through without a new identity on every render. */
+  onDelete: (id: string) => void;
 }
 
 /**
@@ -31,13 +34,14 @@ export const ResultRow = memo(function ResultRow({
   active,
   onClick,
   onDoubleClick,
+  onDelete,
 }: Props) {
   return (
     <div
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       className={[
-        "flex h-14 cursor-default items-center gap-3 border-l-2 px-4",
+        "group flex h-14 cursor-default items-center gap-3 border-l-2 px-4",
         active
           ? "border-l-accent bg-accent/10"
           : "border-l-transparent hover:bg-panelalt",
@@ -63,6 +67,26 @@ export const ResultRow = memo(function ResultRow({
       </div>
 
       {item.pinned && <PinIcon />}
+
+      {/*
+        Delete was keyboard-only for its whole life, which made it effectively
+        invisible -- the binding is not something you discover by using the app.
+        stopPropagation is load-bearing twice over: without it the click also
+        selects the row, and the second half of a double-click would land on
+        whichever row slid up to take this one's place.
+      */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete(item.id);
+        }}
+        onDoubleClick={(e) => e.stopPropagation()}
+        title="Delete (Ctrl+Backspace)"
+        aria-label={`Delete ${item.title || "item"}`}
+        className="shrink-0 rounded p-1 leading-none text-zinc-600 opacity-0 transition hover:bg-zinc-800 hover:text-zinc-200 focus-visible:opacity-100 group-hover:opacity-100"
+      >
+        <CloseIcon />
+      </button>
     </div>
   );
 });
@@ -147,6 +171,22 @@ function KeyIcon() {
     >
       <circle cx="8" cy="15" r="4" />
       <path d="M10.9 12.1L20 3M17 6l2 2M14 9l2 2" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className="h-3 w-3"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <path d="M4 4l8 8M12 4l-8 8" />
     </svg>
   );
 }

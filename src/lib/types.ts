@@ -80,6 +80,16 @@ export interface Filters {
 }
 
 /**
+ * How much a bulk delete would take. `pinned` is shown in the confirm rather
+ * than excluded: pinning says "keep this", so sweeping one up silently would
+ * override an explicit instruction.
+ */
+export interface MatchCount {
+  total: number;
+  pinned: number;
+}
+
+/**
  * One entry in the "paste as" menu. Which entries exist depends on the item —
  * Rust decides by actually trying to parse the content, so the menu never
  * offers a decode that would produce mojibake.

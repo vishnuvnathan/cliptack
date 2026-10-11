@@ -7,6 +7,7 @@ import { ResultList } from "./components/ResultList";
 import { SearchBar } from "./components/SearchBar";
 import { Settings } from "./components/Settings";
 import { TransformMenu } from "./components/TransformMenu";
+import { UndoBar } from "./components/UndoBar";
 import { useHotkeys } from "./lib/hotkeys";
 import {
   hidePanel,
@@ -70,6 +71,10 @@ export default function App() {
       <TransformMenu />
       <ResizeGrips />
 
+      {/* Above the error banner: the undo offer is time-limited and the error
+          is not, so the one you can still act on sits closest to the list. */}
+      <UndoBar />
+
       {error && (
         <div className="shrink-0 border-t border-red-900/50 bg-red-950/40 px-4 py-1.5 text-[11px] text-red-300">
           {error}
@@ -89,9 +94,12 @@ function Footer() {
       <span>↵ paste</span>
       <span>Ctrl+↵ copy</span>
       <span>Ctrl+T as…</span>
-      <span>Ctrl+K cred</span>
-      <span>Ctrl+N note</span>
+      {/* note and credential share a slot so delete can have one. Being absent
+          from this row is what made delete invisible for so long, and it is the
+          binding most in need of advertising -- it is the destructive one. */}
+      <span>Ctrl+N/K new</span>
       <span>Ctrl+P pin</span>
+      <span>Ctrl+⌫ del</span>
       <span className="ml-auto">Esc hide</span>
       {/* The only in-window route to settings -- and so to renaming and
           deleting folders. Without it the tray menu is the sole discoverable
@@ -153,6 +161,7 @@ function useBackendEvents() {
   const bootstrap = useStash((s) => s.bootstrap);
   const setView = useStash((s) => s.setView);
   const clearRevealed = useStash((s) => s.clearRevealed);
+  const dismissUndo = useStash((s) => s.dismissUndo);
 
   useEffect(() => {
     void bootstrap();
@@ -167,15 +176,17 @@ function useBackendEvents() {
     track(
       onPanelOpened(() => {
         // Reopening the panel must never show a password left revealed from
-        // the last time it was up.
+        // the last time it was up, nor an undo offer for something deleted in
+        // a session the user has already walked away from.
         clearRevealed();
+        dismissUndo();
         void refresh();
       }),
     );
     track(onOpenSettings(() => setView("settings")));
 
     return () => unlisteners.forEach((fn) => fn());
-  }, [refresh, bootstrap, setView, clearRevealed]);
+  }, [refresh, bootstrap, setView, clearRevealed, dismissUndo]);
 }
 
 function usePanelHotkeys() {
@@ -186,6 +197,7 @@ function usePanelHotkeys() {
   const copySelectedPassword = useStash((s) => s.copySelectedPassword);
   const revealSelectedPassword = useStash((s) => s.revealSelectedPassword);
   const deleteSelected = useStash((s) => s.deleteSelected);
+  const undoDelete = useStash((s) => s.undoDelete);
   const pinSelected = useStash((s) => s.pinSelected);
   const openNote = useStash((s) => s.openNote);
   const openCredential = useStash((s) => s.openCredential);
@@ -208,6 +220,15 @@ function usePanelHotkeys() {
     else if (item.kind === "note") openNote(item.id);
   }, [openCredential, openNote]);
 
+  // Reads `lastDeleted` at call time rather than subscribing to it: this
+  // handler must not change identity every time something is deleted, and the
+  // answer it returns decides whether the keystroke is consumed at all.
+  const onUndo = useCallback(() => {
+    if (useStash.getState().lastDeleted === null) return false;
+    void undoDelete();
+    return true;
+  }, [undoDelete]);
+
   const onFolderDigit = useCallback(
     (digit: number) => {
       if (digit === 0) {
@@ -227,6 +248,7 @@ function usePanelHotkeys() {
       onEnter: () => void pasteSelected(),
       onCopyOnly: () => void copySelected(),
       onDelete: () => void deleteSelected(),
+      onUndo,
       onEscape,
       onNewNote: () => openNote(null),
       onNewCredential: () => openCredential(null),
@@ -243,6 +265,7 @@ function usePanelHotkeys() {
       copySelected,
       pasteSelected,
       deleteSelected,
+      onUndo,
       onEscape,
       openNote,
       openCredential,

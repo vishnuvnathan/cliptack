@@ -6,7 +6,8 @@ use crate::backup;
 use crate::capture::{self, CaptureStatus};
 use crate::clipboard::hash_bytes;
 use crate::db::model::{
-    ContentType, CredentialBody, CredentialView, Filters, Folder, Item, ItemKind, NewItem,
+    ContentType, CredentialBody, CredentialView, Filters, Folder, Item, ItemKind, MatchCount,
+    NewItem,
 };
 use crate::db::{model::now_millis, queries};
 use crate::detect;
@@ -231,11 +232,102 @@ async fn hide_and_paste(app: &AppHandle) -> PasteStatus {
         .unwrap_or_else(|e| PasteStatus::failed(format!("paste task failed: {e}")))
 }
 
+/// Soft-deletes the item, keeping it restorable for the retention grace window.
+///
+/// A credential is the exception: its password is erased here and now, rather
+/// than surviving encrypted until the hard delete 24h later. Deleting a
+/// credential is a request to be rid of the password, and "gone in a day" is not
+/// an answer to that. The cost is that undo brings the entry back without its
+/// password -- which `restore_item` reports, so the UI can say so.
 #[tauri::command]
-pub async fn delete_item(state: State<'_, AppState>, id: String) -> CmdResult<()> {
+pub async fn delete_item(state: State<'_, AppState>, id: String) -> CmdResult<bool> {
+    let item = queries::get(&state.db.pool, &id)
+        .await
+        .map_err(err("load failed"))?
+        .ok_or_else(|| "item no longer exists".to_string())?;
+
+    let secret_erased = item.is_credential();
+    if secret_erased {
+        queries::delete_secret(&state.db.pool, &id)
+            .await
+            .map_err(err("password erase failed"))?;
+    }
+
     queries::soft_delete(&state.db.pool, &id)
         .await
+        .map_err(err("delete failed"))?;
+
+    Ok(secret_erased)
+}
+
+/// Undo for `delete_item`, within the grace window retention already provides.
+///
+/// `None` means the row is past that window and really gone -- the caller must
+/// surface that rather than leave the impression the item came back.
+#[tauri::command]
+pub async fn restore_item(state: State<'_, AppState>, id: String) -> CmdResult<Option<Item>> {
+    if !queries::restore(&state.db.pool, &id).await.map_err(err("restore failed"))? {
+        return Ok(None);
+    }
+    queries::get(&state.db.pool, &id).await.map_err(err("reload failed"))
+}
+
+/// What a bulk delete over the current view would take. Asked before the
+/// confirm, so the number shown is the real one rather than the length of a
+/// capped result list.
+#[tauri::command]
+pub async fn count_matching(
+    state: State<'_, AppState>,
+    query: String,
+    filters: Filters,
+) -> CmdResult<MatchCount> {
+    let parsed = query::parse(&query);
+    let merged = query::merge(&filters, &parsed.filters);
+
+    queries::count_matching(&state.db.pool, &parsed.text, &merged)
+        .await
+        .map_err(err("count failed"))
+}
+
+/// Deletes everything the current view matches.
+///
+/// Parsed and merged exactly as `search_items` does, and resolved through the
+/// same `push_source_and_filters` construction, so what this takes is what the
+/// list showed. No undo: the id list is unbounded, and a confirm carrying a real
+/// count is the honest trade. The grace window still applies underneath.
+#[tauri::command]
+pub async fn delete_matching(
+    state: State<'_, AppState>,
+    query: String,
+    filters: Filters,
+) -> CmdResult<u64> {
+    let parsed = query::parse(&query);
+    let merged = query::merge(&filters, &parsed.filters);
+
+    let ids = queries::matching_ids(&state.db.pool, &parsed.text, &merged)
+        .await
+        .map_err(err("delete failed"))?;
+    if ids.is_empty() {
+        return Ok(0);
+    }
+
+    // Same rule as `delete_item`: any credential in the set loses its password
+    // now, not in a day.
+    queries::delete_secrets_for(&state.db.pool, &ids)
+        .await
+        .map_err(err("password erase failed"))?;
+
+    queries::soft_delete_many(&state.db.pool, &ids)
+        .await
         .map_err(err("delete failed"))
+}
+
+/// Clears captured clipboard history. Notes, credentials and pinned clips stay.
+#[tauri::command]
+pub async fn clear_clip_history(state: State<'_, AppState>) -> CmdResult<u64> {
+    queries::clear_clip_history(&state.db.pool)
+        .await
+        .map_err(err("clear failed"))
 }
 
 #[tauri::command]

@@ -142,6 +142,23 @@ pub struct Filters {
     pub most_used: bool,
 }
 
+/// How much a bulk delete would take, asked before it is taken.
+///
+/// `pinned` is broken out because pinning is the user's explicit instruction to
+/// keep something, and a bulk delete that silently swept up pinned rows would
+/// override it without saying so. The confirm reports the number; it does not
+/// quietly exclude them.
+///
+/// Counted in SQL rather than from the rows on screen: `search` is capped at a
+/// few hundred results, so the list the user is looking at is not a reliable
+/// count of what matches.
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatchCount {
+    pub total: i64,
+    pub pinned: i64,
+}
+
 /// A grouping bucket. One folder per item -- `tags`/`item_tags` are still
 /// unused and remain the place for cross-cutting labels if they ever land.
 #[derive(Debug, Clone, Serialize, Deserialize)]
