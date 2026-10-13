@@ -554,12 +554,12 @@ function pasteDescription(status: SecurityInfo | null): string {
 }
 
 function captureDescription(status: CaptureStatus | null): string {
-  if (!status) return "Keeps the panel out of screen shares and recordings.";
+  if (!status) return "Keeps the panel and stickies out of screen shares and recordings.";
   if (!status.supported) {
     return status.reason ?? "Not supported on this platform.";
   }
   if (status.reason) return status.reason;
-  return "Keeps the panel out of screen shares and recordings.";
+  return "Keeps the panel and stickies out of screen shares and recordings.";
 }
 
 function Toggle({

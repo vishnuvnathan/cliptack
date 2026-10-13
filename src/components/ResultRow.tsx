@@ -23,6 +23,7 @@ interface Props {
   /** Takes the id rather than closing over the row, so the store action can be
       passed straight through without a new identity on every render. */
   onDelete: (id: string) => void;
+  onPopOut: (id: string) => void;
 }
 
 /**
@@ -35,6 +36,7 @@ export const ResultRow = memo(function ResultRow({
   onClick,
   onDoubleClick,
   onDelete,
+  onPopOut,
 }: Props) {
   return (
     <div
@@ -67,6 +69,23 @@ export const ResultRow = memo(function ResultRow({
       </div>
 
       {item.pinned && <PinIcon />}
+
+      {/* Not offered on a credential at all, rather than offered and refused:
+          a password is never put on screen, so there is no choice to make. */}
+      {item.contentType !== "credential" && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onPopOut(item.id);
+          }}
+          onDoubleClick={(e) => e.stopPropagation()}
+          title="Pop out to screen (Ctrl+O)"
+          aria-label={`Pop ${item.title || "item"} out to screen`}
+          className="shrink-0 rounded p-1 leading-none text-zinc-600 opacity-0 transition hover:bg-zinc-800 hover:text-zinc-200 focus-visible:opacity-100 group-hover:opacity-100"
+        >
+          <PopOutIcon />
+        </button>
+      )}
 
       {/*
         Delete was keyboard-only for its whole life, which made it effectively
@@ -187,6 +206,23 @@ function CloseIcon() {
       aria-hidden="true"
     >
       <path d="M4 4l8 8M12 4l-8 8" />
+    </svg>
+  );
+}
+
+function PopOutIcon() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className="h-3 w-3"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M9 2h5v5M14 2L7.5 8.5M12 9.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3.5" />
     </svg>
   );
 }

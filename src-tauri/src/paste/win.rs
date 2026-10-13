@@ -12,7 +12,11 @@ use super::PasteStatus;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use windows::Win32::Foundation::HWND;
+use windows::Win32::System::Com::{
+    CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
+};
 use windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
+use windows::Win32::UI::Accessibility::{CUIAutomation, IUIAutomation};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetAsyncKeyState, SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP,
     VIRTUAL_KEY, VK_C, VK_CONTROL, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT, VK_V,
@@ -64,6 +68,18 @@ pub fn support() -> PasteStatus {
 }
 
 pub fn paste_into_previous() -> PasteStatus {
+    paste_into_previous_inner(false)
+}
+
+/// As `paste_into_previous`, but only sends the keystroke once UI Automation
+/// confirms the focused control in the target window is a password box. Any
+/// other answer -- a plain text field, a control UIA cannot describe, an error
+/// -- sends nothing, and the password stays on the clipboard to place by hand.
+pub fn paste_password_into_previous() -> PasteStatus {
+    paste_into_previous_inner(true)
+}
+
+fn paste_into_previous_inner(require_password: bool) -> PasteStatus {
     let Some(raw) = PREVIOUS.lock().ok().and_then(|g| *g) else {
         return PasteStatus::failed("nothing was focused when the panel opened");
     };
@@ -77,6 +93,25 @@ pub fn paste_into_previous() -> PasteStatus {
         return PasteStatus::failed(
             "could not focus the previous window; the item is on your clipboard",
         );
+    }
+
+    if require_password {
+        match focused_is_password(target) {
+            Ok(true) => {}
+            Ok(false) => {
+                return PasteStatus::failed(
+                    "Nothing typed: the focused field isn't a password field. The password \
+                     was copied for 30 seconds -- click the password field and press Ctrl+V.",
+                )
+            }
+            Err(e) => {
+                tracing::debug!(error = %e, "could not inspect the focused control");
+                return PasteStatus::failed(
+                    "Nothing typed: couldn't confirm the focused field is a password field. \
+                     The password was copied for 30 seconds -- press Ctrl+V to paste it.",
+                );
+            }
+        }
     }
 
     match send_paste() {
@@ -130,6 +165,34 @@ fn wait_for_foreground(target: HWND) -> bool {
         }
         std::thread::sleep(POLL_STEP);
     }
+}
+
+/// Asks UI Automation whether the control with keyboard focus is a password
+/// box, and whether it belongs to `target`'s process -- a focus that drifted to
+/// some other window between the focus check and now must not pass.
+///
+/// Runs on a `spawn_blocking` thread, so COM is initialised here and balanced
+/// before returning. `S_FALSE` (already initialised on this thread) still needs
+/// the matching `CoUninitialize`; `RPC_E_CHANGED_MODE` does not.
+fn focused_is_password(target: HWND) -> Result<bool, String> {
+    let hr = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
+    let initialised = hr.is_ok();
+    let result = (|| -> windows::core::Result<bool> {
+        let uia: IUIAutomation =
+            unsafe { CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)? };
+        let el = unsafe { uia.GetFocusedElement()? };
+
+        let mut target_pid: u32 = 0;
+        unsafe { GetWindowThreadProcessId(target, Some(&mut target_pid)) };
+        if unsafe { el.CurrentProcessId()? } as u32 != target_pid {
+            return Ok(false);
+        }
+        Ok(unsafe { el.CurrentIsPassword()? }.as_bool())
+    })();
+    if initialised {
+        unsafe { CoUninitialize() };
+    }
+    result.map_err(|e| e.to_string())
 }
 
 fn key(vk: VIRTUAL_KEY, up: bool) -> INPUT {
@@ -197,5 +260,41 @@ pub fn copy_selection() -> Result<(), String> {
         Ok(())
     } else {
         Err("Windows blocked the keystroke (an elevated window?)".to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Manual probe, not part of the suite: focus a field in another window,
+    /// then run `cargo test uia_probe -- --ignored --nocapture` within the
+    /// `STASH_PROBE_DELAY_MS` window. Prints what the password guard would see.
+    #[test]
+    #[ignore]
+    fn uia_probe() {
+        let delay = std::env::var("STASH_PROBE_DELAY_MS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+        std::thread::sleep(Duration::from_millis(delay));
+        let fg = unsafe { GetForegroundWindow() };
+        let mut fg_pid = 0u32;
+        unsafe { GetWindowThreadProcessId(fg, Some(&mut fg_pid)) };
+
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+            let uia: IUIAutomation =
+                CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER).unwrap();
+            let el = uia.GetFocusedElement().unwrap();
+            println!(
+                "PROBE fg_pid={fg_pid} focused_pid={:?} name={:?} class={:?} is_password={:?}",
+                el.CurrentProcessId(),
+                el.CurrentName().map(|s| s.to_string()),
+                el.CurrentClassName().map(|s| s.to_string()),
+                el.CurrentIsPassword().map(|b| b.as_bool()),
+            );
+        }
+        println!("PROBE guard={:?}", focused_is_password(fg));
     }
 }

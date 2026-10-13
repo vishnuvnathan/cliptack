@@ -46,13 +46,20 @@
   dark surface and wash out on white. Matched by whole class token ([class~=])
   so a `hover:text-red-300` on a grey button does not turn it red permanently.
 */
+/* A sticky on a paper colour (see paperStyle in theme.ts) is a light surface
+   under either theme, so it takes the same fix. */
 :root[data-theme="light"] [class~="text-red-300"],
-:root[data-theme="light"] [class~="text-red-400"] {
+:root[data-theme="light"] [class~="text-red-400"],
+[data-paper] [class~="text-red-300"],
+[data-paper] [class~="text-red-400"] {
   color: #b91c1c;
 }
 :root[data-theme="light"] .hover\:text-red-300:hover,
 :root[data-theme="light"] .hover\:text-red-400:hover {
   color: #b91c1c;
+}
+[data-paper] [class~="bg-red-950/40"] {
+  background-color: rgb(254 226 226 / 0.7);
 }
 :root[data-theme="light"] [class~="text-amber-300"],
 :root[data-theme="light"] [class~="text-amber-400/90"],

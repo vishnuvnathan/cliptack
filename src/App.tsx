@@ -17,6 +17,7 @@ import {
   hidePanel,
   onItemAdded,
   onItemBumped,
+  onItemUpdated,
   onOpenSettings,
   onPanelOpened,
   startMove,
@@ -28,6 +29,7 @@ import { useStash } from "./store/useStash";
 export default function App() {
   const view = useStash((s) => s.view);
   const error = useStash((s) => s.error);
+  const notice = useStash((s) => s.notice);
 
   useBackendEvents();
   const theme = useStash((s) => s.settings?.theme);
@@ -82,6 +84,12 @@ export default function App() {
       {/* Above the error banner: the undo offer is time-limited and the error
           is not, so the one you can still act on sits closest to the list. */}
       <UndoBar />
+
+      {notice && (
+        <div className="shrink-0 border-t border-amber-500/25 bg-amber-500/[0.06] px-4 py-1.5 text-[11px] text-amber-400/90">
+          {notice}
+        </div>
+      )}
 
       {error && (
         <div className="shrink-0 border-t border-red-900/50 bg-red-950/40 px-4 py-1.5 text-[11px] text-red-300">
@@ -154,6 +162,8 @@ function useBackendEvents() {
 
     track(onItemAdded(() => void refresh()));
     track(onItemBumped(() => void refresh()));
+    // A sticky saved a note; the title or preview here may now be stale.
+    track(onItemUpdated(() => void refresh()));
     track(
       onPanelOpened(() => {
         // Reopening the panel must never show a password left revealed from
@@ -176,6 +186,7 @@ function usePanelHotkeys() {
   const copySelected = useStash((s) => s.copySelected);
   const pasteSelected = useStash((s) => s.pasteSelected);
   const copySelectedPassword = useStash((s) => s.copySelectedPassword);
+  const pastePassword = useStash((s) => s.pastePassword);
   const revealSelectedPassword = useStash((s) => s.revealSelectedPassword);
   const deleteSelected = useStash((s) => s.deleteSelected);
   const undoDelete = useStash((s) => s.undoDelete);
@@ -188,6 +199,7 @@ function usePanelHotkeys() {
   const transformsOpen = useStash((s) => s.transforms !== null);
   const openFolderMenu = useStash((s) => s.openFolderMenu);
   const folderMenuOpen = useStash((s) => s.folderMenuOpen);
+  const popOutSelected = useStash((s) => s.popOutSelected);
 
   const onEscape = useCallback(() => {
     void hidePanel();
@@ -240,7 +252,9 @@ function usePanelHotkeys() {
       onSettings: () => setView("settings"),
       onHelp: () => setView("help"),
       onPin: () => void pinSelected(),
+      onPopOut: () => void popOutSelected(),
       onCopyPassword: () => void copySelectedPassword(),
+      onPastePassword: () => void pastePassword(),
       onToggleReveal: () => void revealSelectedPassword(),
       onEditSelected,
       onFolderDigit,
@@ -256,7 +270,9 @@ function usePanelHotkeys() {
       openCredential,
       setView,
       pinSelected,
+      popOutSelected,
       copySelectedPassword,
+      pastePassword,
       revealSelectedPassword,
       onEditSelected,
       onFolderDigit,

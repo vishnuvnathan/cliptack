@@ -18,6 +18,7 @@ use crate::settings::{self, Settings};
 use crate::shortcuts;
 use crate::startup;
 use crate::state::{AppState, SelfCopyGuard};
+use crate::sticky;
 use crate::transform::{self, Transform};
 use crate::tray;
 use crate::window;
@@ -243,6 +244,7 @@ async fn hide_and_paste(app: &AppHandle) -> PasteStatus {
 /// password -- which `restore_item` reports, so the UI can say so.
 #[tauri::command]
 pub async fn delete_item(
+    app: AppHandle,
     state: State<'_, AppState>,
     id: String,
 ) -> CmdResult<bool> {
@@ -261,6 +263,13 @@ pub async fn delete_item(
     queries::soft_delete(&state.db.pool, &id)
         .await
         .map_err(err("delete failed"))?;
+
+    // A sticky for a deleted item would be a card for nothing. Undo brings the
+    // item back but not the window; reopening it is one Ctrl+O.
+    sticky::close_window(&app, &id);
+    if let Err(e) = queries::delete_sticky(&state.db.pool, &id).await {
+        tracing::warn!(error = %e, "could not forget sticky of deleted item");
+    }
 
     Ok(secret_erased)
 }
@@ -302,6 +311,7 @@ pub async fn count_matching(
 /// count is the honest trade. The grace window still applies underneath.
 #[tauri::command]
 pub async fn delete_matching(
+    app: AppHandle,
     state: State<'_, AppState>,
     query: String,
     filters: Filters,
@@ -325,10 +335,12 @@ pub async fn delete_matching(
     let deleted = queries::soft_delete_many(&state.db.pool, &ids)
         .await
         .map_err(err("delete failed"))?;
+    sticky::close_orphans(&app, &state.db).await;
     Ok(deleted)
 }
 
-/// Clears captured clipboard history. Notes, credentials and pinned clips stay.
+/// Clears captured clipboard history. Notes, credentials, pinned clips and
+/// clips open as a sticky stay.
 #[tauri::command]
 pub async fn clear_clip_history(state: State<'_, AppState>) -> CmdResult<u64> {
     let cleared = queries::clear_clip_history(&state.db.pool)
@@ -349,6 +361,7 @@ pub async fn toggle_pin(state: State<'_, AppState>, id: String, pinned: bool) ->
 /// special-casing on either side.
 #[tauri::command]
 pub async fn save_note(
+    app: AppHandle,
     state: State<'_, AppState>,
     id: Option<String>,
     title: String,
@@ -376,6 +389,9 @@ pub async fn save_note(
             queries::update_note(&state.db.pool, &id, &title, &content)
                 .await
                 .map_err(err("note save failed"))?;
+            // The same note can be open in the panel and in a sticky at once;
+            // this is how each hears about the other's save.
+            let _ = app.emit("item-updated", &id);
             queries::get(&state.db.pool, &id)
                 .await
                 .map_err(err("note reload failed"))?
@@ -480,6 +496,7 @@ pub fn set_settings(
     if let Some(win) = window::panel(&app) {
         capture::apply(&win, settings.capture_exclusion);
     }
+    sticky::apply_capture_all(&app, settings.capture_exclusion);
 
     state
         .capture_gate
@@ -526,6 +543,7 @@ pub fn security_info() -> SecurityInfo {
 #[tauri::command]
 pub fn set_capture_exclusion(app: AppHandle, enabled: bool) -> CmdResult<CaptureStatus> {
     let win = window::panel(&app).ok_or_else(|| "panel window missing".to_string())?;
+    sticky::apply_capture_all(&app, enabled);
     Ok(capture::apply(&win, enabled))
 }
 
@@ -545,6 +563,82 @@ pub fn hide_panel(app: AppHandle) -> CmdResult<()> {
 pub fn begin_window_drag() -> CmdResult<()> {
     window::arm_drag_guard();
     Ok(())
+}
+
+/* -- stickies -------------------------------------------------------------- */
+
+/// Puts an item on screen in its own always-on-top window.
+///
+/// Credentials are refused: a password floating over every other window, in
+/// every screen share that is not excluded, is what the rest of the app goes
+/// out of its way to prevent. The item is deliberately *not* pinned -- pinning
+/// is its own choice, made with Ctrl+P. Retention and "Clear clip history"
+/// skip any clip with a row in `stickies` instead, so a card on screen is never
+/// emptied from under it.
+#[tauri::command]
+pub async fn open_sticky(app: AppHandle, state: State<'_, AppState>, id: String) -> CmdResult<()> {
+    let item = queries::get(&state.db.pool, &id)
+        .await
+        .map_err(err("load failed"))?
+        .ok_or_else(|| "item no longer exists".to_string())?;
+    if item.is_credential() {
+        return Err("Credentials cannot be pinned to the screen".to_string());
+    }
+
+    let title = item.title.as_deref().unwrap_or("Stash");
+    let geo = sticky::open_window(&app, &id, title, None)?;
+    queries::upsert_sticky(&state.db.pool, &id, geo)
+        .await
+        .map_err(err("could not record sticky"))
+}
+
+/// The sticky's own close button. Once its row is gone the clip is ordinary
+/// history again, subject to retention like any other unpinned clip.
+#[tauri::command]
+pub async fn close_sticky(app: AppHandle, state: State<'_, AppState>, id: String) -> CmdResult<()> {
+    queries::delete_sticky(&state.db.pool, &id)
+        .await
+        .map_err(err("could not forget sticky"))?;
+    sticky::close_window(&app, &id);
+    Ok(())
+}
+
+/// Called by a sticky once it has stopped moving. The geometry is read here
+/// from the window rather than sent from JS, so there is one source for it.
+#[tauri::command]
+pub async fn save_sticky_geometry(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+) -> CmdResult<()> {
+    let Some(win) = app.get_webview_window(&sticky::label_for(&id)) else {
+        return Ok(());
+    };
+    let Some(geo) = sticky::current_geometry(&win) else {
+        return Ok(()); // minimised; keep the last real position
+    };
+    queries::upsert_sticky(&state.db.pool, &id, geo)
+        .await
+        .map_err(err("could not save sticky position"))
+}
+
+/// The sticky asks for its own colour on load; no other window needs it.
+#[tauri::command]
+pub async fn get_sticky_color(state: State<'_, AppState>, id: String) -> CmdResult<String> {
+    let color = queries::sticky_color(&state.db.pool, &id)
+        .await
+        .map_err(err("could not read sticky colour"))?;
+    Ok(color.unwrap_or_else(|| sticky::COLORS[0].to_string()))
+}
+
+#[tauri::command]
+pub async fn set_sticky_color(state: State<'_, AppState>, id: String, color: String) -> CmdResult<()> {
+    if !sticky::COLORS.contains(&color.as_str()) {
+        return Err(format!("unknown sticky colour: {color}"));
+    }
+    queries::set_sticky_color(&state.db.pool, &id, &color)
+        .await
+        .map_err(err("could not save sticky colour"))
 }
 
 /* -- folders --------------------------------------------------------------- */
@@ -752,10 +846,12 @@ pub async fn copy_credential_field(
 /// Copies a credential field and pastes it into the window the panel was opened
 /// from.
 ///
-/// Username only. A password lands on the clipboard and stays there for the
-/// user to place deliberately: the field that had focus before the panel opened
-/// is not reliably the password field, and typing a password into the wrong one
-/// is not a recoverable mistake.
+/// A password is pasted only into a verified password box. The field that had
+/// focus before the panel opened is not reliably the password field, and typing
+/// a password into the wrong one is not a recoverable mistake -- so the paste
+/// backend asks UI Automation what is focused and sends nothing unless it is a
+/// password control. Either way the password is on the clipboard with its expiry
+/// armed, so a refused paste is still one Ctrl+V away.
 #[tauri::command]
 pub async fn paste_credential_field(
     app: AppHandle,
@@ -763,17 +859,32 @@ pub async fn paste_credential_field(
     id: String,
     field: String,
 ) -> CmdResult<PasteStatus> {
-    if field != "username" {
-        return Err(format!("'{field}' is copied, not pasted"));
-    }
+    let is_password = match field.as_str() {
+        "username" => false,
+        "password" => true,
+        other => return Err(format!("unknown credential field '{other}'")),
+    };
 
     let text = credential_field_text(&state, &id, &field).await?;
     let hash = hash_bytes(text.as_bytes());
-    write_text_to_clipboard(state.self_copy.clone(), text, hash).await?;
-    state.password_clipboard.disarm();
+    write_text_to_clipboard(state.self_copy.clone(), text, hash.clone()).await?;
+    if is_password {
+        arm_password_expiry(&state, hash);
+    } else {
+        state.password_clipboard.disarm();
+    }
     record_use(&state, &id).await;
 
-    Ok(hide_and_paste(&app).await)
+    if !is_password {
+        return Ok(hide_and_paste(&app).await);
+    }
+
+    if let Some(win) = window::panel(&app) {
+        window::hide(&win);
+    }
+    Ok(tauri::async_runtime::spawn_blocking(paste::paste_password_into_previous)
+        .await
+        .unwrap_or_else(|e| PasteStatus::failed(format!("paste task failed: {e}"))))
 }
 
 /// Resolves one field to its plaintext. The password path is the only place a

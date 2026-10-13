@@ -3,7 +3,9 @@ use anyhow::Result;
 use sqlx::{Row, SqlitePool};
 use std::time::Duration;
 
-/// Non-pinned clips kept. Notes and pinned clips are never pruned.
+/// Non-pinned clips kept. Notes, pinned clips and clips open as a sticky are
+/// never pruned -- the last because pruning one would empty a card still up on
+/// screen, and opening a sticky deliberately does not pin its item.
 const KEEP_CLIPS: i64 = 1000;
 /// How long a soft-deleted row stays recoverable before the blob is unlinked.
 const GRACE_MS: i64 = 24 * 60 * 60 * 1000;
@@ -38,7 +40,8 @@ pub async fn run_once(db: &Db) -> Result<()> {
 async fn trim_overflow(pool: &SqlitePool) -> Result<u64> {
     let live: (i64,) = sqlx::query_as(
         "SELECT COUNT(*) FROM items
-         WHERE kind = 'clip' AND pinned = 0 AND deleted_at IS NULL",
+         WHERE kind = 'clip' AND pinned = 0 AND deleted_at IS NULL
+           AND id NOT IN (SELECT item_id FROM stickies)",
     )
     .fetch_one(pool)
     .await?;
@@ -50,9 +53,11 @@ async fn trim_overflow(pool: &SqlitePool) -> Result<u64> {
     let res = sqlx::query(
         "UPDATE items SET deleted_at = ?1
          WHERE kind = 'clip' AND pinned = 0 AND deleted_at IS NULL
+           AND id NOT IN (SELECT item_id FROM stickies)
            AND id NOT IN (
              SELECT id FROM items
              WHERE kind = 'clip' AND pinned = 0 AND deleted_at IS NULL
+               AND id NOT IN (SELECT item_id FROM stickies)
              ORDER BY updated_at DESC LIMIT ?2
            )",
     )

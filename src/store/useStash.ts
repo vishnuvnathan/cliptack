@@ -33,6 +33,13 @@ interface StashState {
   selected: number;
   loading: boolean;
   error: string | null;
+  /**
+   * Why the last paste did not land: the panel is already hidden when the
+   * outcome arrives, so this has to survive until it next opens. Kept apart
+   * from `error` because every list refresh -- including the one on open --
+   * clears that.
+   */
+  notice: string | null;
 
   view: View;
   editingNoteId: string | null;
@@ -85,6 +92,9 @@ interface StashState {
   closeTransforms: () => void;
   applyTransform: (transformId: string, paste: boolean) => Promise<void>;
   pinSelected: () => Promise<void>;
+  /** Ctrl+O and the row's pop-out button. Both land on `popOut`. */
+  popOutSelected: () => Promise<void>;
+  popOut: (id: string) => Promise<void>;
 
   loadFolders: () => Promise<void>;
   setFolder: (id: string | null) => void;
@@ -101,6 +111,7 @@ interface StashState {
   saveCredential: (draft: Omit<CredentialDraft, "id">) => Promise<void>;
   copySelectedUsername: () => Promise<void>;
   copySelectedPassword: () => Promise<void>;
+  pastePassword: () => Promise<void>;
   revealSelectedPassword: () => Promise<void>;
   clearRevealed: () => void;
 
@@ -152,6 +163,7 @@ export const useStash = create<StashState>((set, get) => ({
   selected: 0,
   loading: false,
   error: null,
+  notice: null,
 
   view: "list",
   editingNoteId: null,
@@ -172,7 +184,7 @@ export const useStash = create<StashState>((set, get) => ({
   settings: null,
 
   setQuery(q) {
-    set({ query: q });
+    set({ query: q, notice: null });
     if (searchTimer) clearTimeout(searchTimer);
     searchTimer = setTimeout(() => void get().refresh(), DEBOUNCE_MS);
   },
@@ -294,7 +306,7 @@ export const useStash = create<StashState>((set, get) => ({
 
       // The panel is already hidden by this point; the message is waiting when
       // it next opens.
-      set({ error: status.pasted ? null : status.reason });
+      set({ notice: status.pasted ? null : status.reason });
     } catch (e) {
       set({ error: String(e) });
     }
@@ -339,7 +351,7 @@ export const useStash = create<StashState>((set, get) => ({
     try {
       if (wantPaste) {
         const status = await ipc.pasteItem(item.id, transformId);
-        set({ error: status.pasted ? null : status.reason });
+        set({ notice: status.pasted ? null : status.reason });
       } else {
         await ipc.copyItem(item.id, transformId);
         await ipc.hidePanel();
@@ -493,6 +505,31 @@ export const useStash = create<StashState>((set, get) => ({
     }
   },
 
+  async popOutSelected() {
+    const { items, selected } = get();
+    const item = items[selected];
+    if (item) await get().popOut(item.id);
+  },
+
+  /**
+   * Refused here for credentials before Rust refuses it too: the message is
+   * the same either way, but this one costs no round trip. Popping out leaves
+   * the item's pinned state alone, so there is nothing in the list to refresh.
+   */
+  async popOut(id) {
+    const item = get().items.find((i) => i.id === id);
+    if (item && isCredential(item)) {
+      set({ error: "Credentials cannot be pinned to the screen" });
+      return;
+    }
+    try {
+      await ipc.openSticky(id);
+      set({ error: null });
+    } catch (e) {
+      set({ error: String(e) });
+    }
+  },
+
   /* -- folders ------------------------------------------------------------ */
 
   async loadFolders() {
@@ -604,6 +641,29 @@ export const useStash = create<StashState>((set, get) => ({
       // ever holds it.
       await ipc.copyCredentialField(item.id, "password");
       await ipc.hidePanel();
+    } catch (e) {
+      set({ error: String(e) });
+    }
+  },
+
+  /**
+   * Ctrl+Shift+Enter. Rust only types the password when the focused field
+   * reports itself as a password box; otherwise it is left on the clipboard and
+   * `status.reason` says to press Ctrl+V. Auto-paste off means copy, as Enter does.
+   */
+  async pastePassword() {
+    const { items, selected, settings } = get();
+    const item = items[selected];
+    if (!item || !isCredential(item)) return;
+
+    if (settings && !settings.autoPaste) {
+      await get().copySelectedPassword();
+      return;
+    }
+
+    try {
+      const status = await ipc.pasteCredentialField(item.id, "password");
+      set({ notice: status.pasted ? null : status.reason });
     } catch (e) {
       set({ error: String(e) });
     }

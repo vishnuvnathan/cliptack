@@ -56,8 +56,10 @@ step into a dependency, set `debug = true` there and expect the space back.
 | `Ctrl+Backspace` | delete the selected item |
 | `Ctrl+Z` | undo that delete |
 | `Ctrl+P` | pin or unpin |
+| `Ctrl+O` | pin the selected item to the screen as a sticky |
 | `Ctrl+N` | new note |
 | `Ctrl+K` | new credential |
+| `Ctrl+Shift+Enter` | paste the selected credential's password — only into a password field |
 | `Ctrl+Shift+C` | copy the selected credential's password |
 | `Ctrl+M` | move the selected item to a folder (or create one) |
 | `Alt+1`…`9` | filter by folder (`Alt+0` clears) |
@@ -145,6 +147,49 @@ pulled in as crates — a few lines each, in a project that already hand-rolls i
 DIB decoding, and one fewer dependency in a tree whose selling point is what is
 *not* in it.
 
+## Pin to screen
+
+`Ctrl+O`, or the arrow button on a row, pops the selected item out into its own
+small window that stays on top of everything else: a JSON snippet to copy from
+while you work, a colour as a swatch, a screenshot as a reference. It is the
+thing Windows Sticky Notes cannot do -- float a *clipboard item*, not just text
+you typed. Click the copy button (or `Ctrl+C` with nothing selected) to put the
+item back on the clipboard.
+
+- **Notes are editable in the sticky** and save themselves 600ms after you stop
+  typing. A note open in the panel and in a sticky stays in step both ways
+  (`item-updated`); if both are edited at once, the last save wins.
+- **Clips are read-only**, for the same reason a transform never rewrites the
+  stored item: the history records what you copied.
+- **Credentials cannot be stuck.** The row has no button for one, and Rust
+  refuses it as well. A password floating over every window is what the rest of
+  the app goes out of its way to prevent.
+- **Opening a sticky does not pin the item**, so no pin icon appears on its
+  row. Retention and "Clear clip history" skip any clip that has a sticky open
+  instead, so a card on screen is never emptied. Once the sticky is closed the
+  clip is ordinary history again.
+- **Stickies follow the capture-exclusion setting** ("Hide Stash from screen
+  capture"), on by default, so a card on screen does not leak into a screen
+  share. Toggling the setting re-applies it to every open sticky.
+- **They come back after a restart**, where you left them. A position on a
+  monitor that is no longer connected falls back to beside the cursor. Deleting
+  the item closes its sticky; undoing the delete does not reopen it.
+- Popping out several items in a row without moving the mouse cascades them
+  30px apart rather than stacking them exactly on top of each other.
+
+**The cost is memory, and it is why there is a cap of eight.** Each sticky is
+its own WebView2 window with its own renderer process. Measured on Windows 11
+with the debug build: the app with no stickies was 205 MB private across 8
+processes (`stash.exe` alone ~10 MB private), and each sticky added roughly
+27-32 MB private (about 55-65 MB working set). Eight open stickies is therefore
+about +250 MB. The idle figures elsewhere in this README are for `stash.exe` on
+its own, which stickies barely move.
+
+Window geometry is a fact about this machine's monitors, so the `stickies`
+table is not part of export/import. The sticky is the same bundle as the panel,
+opened by Rust at `index.html?sticky=<id>`; `main.tsx` renders only the card for
+that URL, with none of the panel's store, hotkeys or hide-on-blur.
+
 ## Usage-aware ranking
 
 `items.use_count` counts the times an item was copied or pasted *out* of Stash,
@@ -215,9 +260,15 @@ a different risk from the written-but-unrun pasteboard code elsewhere in this
 tree — and Wayland forbids it outright. Both return "unsupported" with a reason
 the settings panel shows, and `Enter` falls back to copying.
 
-Credential usernames paste the same way. Passwords do not: the field that had
-focus before the panel opened is not reliably the password field, and a password
-typed into the wrong one is not a mistake you can take back.
+Credential usernames paste the same way. Passwords paste only with
+`Ctrl+Shift+Enter`, and only into a password field: the field that had focus
+before the panel opened is not reliably the password field, and a password typed
+into the wrong one is not a mistake you can take back. So after focus is handed
+back, UI Automation is asked about the focused control, and `Ctrl+V` is sent only
+if it reports `IsPassword` and belongs to the target window's process. Any other
+answer — a text box, a control UIA cannot describe, an error — sends nothing; the
+password is already on the clipboard with its 30-second clear armed, and the panel
+says to press `Ctrl+V` yourself.
 
 ## How it stays quiet when idle
 
@@ -297,6 +348,12 @@ Checked by running the app, not by reading the code:
 
 | Encrypted export | driven through the settings panel and the native save dialog: wrote a 24,270-byte `.stashbk` beginning `STASHBK1`, containing none of `Daily Marble`, `vnathan`, `David` or `stash-export` as readable bytes |
 | Hide-on-blur guard | the panel was still up behind both the save and the open dialog; without `window::HideGuard` the picker's focus grab would have dismissed it mid-export |
+| Pin to screen | `Ctrl+O` on a JSON clip, a note, a colour and an image opened four topmost windows with `GetWindowDisplayAffinity` = `0x11`, and the panel kept the foreground throughout -- the sticky is shown with `SW_SHOWNOACTIVATE`, so popping one out never dismisses the panel |
+| Sticky copy | `Ctrl+C` in the JSON sticky put the JSON on the clipboard; the item's `use_count` went to 1 and no duplicate clip was recorded |
+| Sticky note sync | text typed into the sticky was in the database 1.5s later; text then saved from the panel's editor appeared in the sticky's textarea (read back through UI Automation) |
+| Sticky refusals | `Ctrl+O` on a credential showed "Credentials cannot be pinned to the screen" and opened nothing; the ninth `Ctrl+O` showed "At most 8 stickies…" with exactly eight open |
+| Sticky lifecycle | deleting a stuck note closed its window and removed its row; the close button removed the row; a moved sticky came back at the same position and size after the process was killed and relaunched |
+| Sticky capture toggle | with exclusion off, restored stickies read `0x0`; switching it on in Settings turned all six open stickies to `0x11` without a restart |
 | Import is idempotent | importing that backup into the database it came from reported **"Imported 0 items · 25 already here"** — including the notes and credentials, which carry no hash and are matched on exact content |
 
 Verified by the test suite rather than by hand: the JSON and Markdown formats,
@@ -410,6 +467,7 @@ src-tauri/
   src/clipboard/          watcher + per-platform readers
   src/capture/            screen-capture exclusion, one command, three backends
   src/paste/              focus restore + synthetic Ctrl+V, same three-backend shape
+  src/sticky.rs           pin-to-screen windows: open, place, restore, close
   src/query.rs            the search query language; pure, no database access
   src/archive/            the export/import document; mod.rs is pure, io.rs touches the DB
   src/backup.rs           passphrase-encrypted container (Argon2id + AES-256-GCM)
@@ -433,3 +491,5 @@ than calling `invoke` from a component.
 - Secrets are only encrypted on Windows. On macOS and Linux they are plaintext
   at rest, which the settings panel warns about.
 - `tags` and `item_tags` exist in the schema with no UI behind them.
+- Stickies are verified on Windows only. The macOS and Linux paths go through
+  the same Tauri window API but have not been run.

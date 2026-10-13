@@ -27,6 +27,7 @@ const GROUPS: Array<{ title: string; rows: Row[] }> = [
       { keys: "Ctrl+K", does: "New credential" },
       { keys: "Ctrl+Shift+E", does: "Edit the selected note or credential" },
       { keys: "Ctrl+P", does: "Pin / unpin" },
+      { keys: "Ctrl+O", does: "Pop out as an always-on-top sticky" },
       { keys: "Ctrl+M", does: "Move to a folder" },
       { keys: "Ctrl+Backspace", does: "Delete" },
       { keys: "Ctrl+Z", does: "Undo the last delete" },
@@ -35,6 +36,7 @@ const GROUPS: Array<{ title: string; rows: Row[] }> = [
   {
     title: "Credentials",
     rows: [
+      { keys: "Ctrl+Shift+Enter", does: "Paste the password (only into a password field)" },
       { keys: "Ctrl+Shift+C", does: "Copy the password" },
       { keys: "Ctrl+Shift+U", does: "Reveal / hide the password" },
     ],

@@ -12,6 +12,7 @@ mod settings;
 mod shortcuts;
 mod startup;
 mod state;
+mod sticky;
 mod transform;
 mod tray;
 mod window;
@@ -121,6 +122,7 @@ pub fn run() {
                 }
             }
 
+            sticky::restore_all(handle.clone(), db.clone());
             clipboard::spawn(handle.clone(), db.clone(), self_copy, capture_gate);
             db::retention::spawn(db);
 
@@ -131,7 +133,11 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|win, event| {
+            // Every window lands here, and the rules below are the panel's.
+            // Applied to a sticky they would hide the panel whenever the sticky
+            // lost focus, and turn its close into "hide the panel".
             if win.label() != window::PANEL {
+                sticky::on_window_event(win, event);
                 return;
             }
             match event {
@@ -173,6 +179,11 @@ pub fn run() {
             commands::security_info,
             commands::hide_panel,
             commands::begin_window_drag,
+            commands::open_sticky,
+            commands::close_sticky,
+            commands::save_sticky_geometry,
+            commands::get_sticky_color,
+            commands::set_sticky_color,
             commands::read_blob,
             commands::list_folders,
             commands::create_folder,

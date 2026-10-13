@@ -150,7 +150,7 @@ fn restore_position(win: &WebviewWindow) -> bool {
     let Some((x, y)) = with_settings(win, |s| s.window_x.zip(s.window_y)).flatten() else {
         return false;
     };
-    if !point_on_some_monitor(win, x, y) {
+    if !point_on_some_monitor(win.app_handle(), x, y) {
         tracing::debug!(x, y, "saved panel position is off-screen; centering instead");
         return false;
     }
@@ -158,8 +158,10 @@ fn restore_position(win: &WebviewWindow) -> bool {
     win.set_position(PhysicalPosition::new(x, y)).is_ok()
 }
 
-fn point_on_some_monitor(win: &WebviewWindow, x: i32, y: i32) -> bool {
-    let Ok(monitors) = win.available_monitors() else {
+/// Shared with `sticky`, whose saved positions face the same unplugged-display
+/// problem as the panel's.
+pub(crate) fn point_on_some_monitor(app: &AppHandle, x: i32, y: i32) -> bool {
+    let Ok(monitors) = app.available_monitors() else {
         return false;
     };
     monitors.iter().any(|m| {

@@ -226,3 +226,15 @@ pub fn now_millis() -> i64 {
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0)
 }
+
+/// Where a sticky window sits, in physical pixels. Physical rather than logical
+/// because that is what the window reports and what `set_position` takes; the
+/// conversion for a monitor with a different scale happens once, on open.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StickyGeometry {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+}

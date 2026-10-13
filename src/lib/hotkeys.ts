@@ -27,7 +27,11 @@ export interface HotkeyHandlers {
   /** F1 or Ctrl+/: show the shortcut reference. */
   onHelp: () => void;
   onPin: () => void;
+  /** Ctrl+O: pop the selection out as an always-on-top sticky. */
+  onPopOut: () => void;
   onCopyPassword: () => void;
+  /** Ctrl+Shift+Enter: paste the password, but only into a password field. */
+  onPastePassword: () => void;
   onToggleReveal: () => void;
   onEditSelected: () => void;
   /** 0 clears the folder filter; 1-9 select the folder at that position. */
@@ -61,7 +65,8 @@ export function useHotkeys(handlers: HotkeyHandlers, enabled: boolean) {
           // Handled here, above the `!mod` guard below, so the Ctrl variant has
           // to be split out explicitly rather than falling through to it.
           e.preventDefault();
-          if (mod) handlers.onCopyOnly();
+          if (mod && e.shiftKey) handlers.onPastePassword();
+          else if (mod) handlers.onCopyOnly();
           else handlers.onEnter();
           return;
         case "F1":
@@ -126,6 +131,10 @@ export function useHotkeys(handlers: HotkeyHandlers, enabled: boolean) {
         case "p":
           e.preventDefault();
           handlers.onPin();
+          break;
+        case "o":
+          e.preventDefault();
+          handlers.onPopOut();
           break;
         case "t":
           e.preventDefault();

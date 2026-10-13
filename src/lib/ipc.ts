@@ -216,14 +216,15 @@ export async function copyCredentialField(
 }
 
 /**
- * Username only, and deliberately so: the field that had focus before the panel
- * opened is not reliably the password field, and a password typed into the
- * wrong one is not a mistake you can take back. Passwords are copied, then
- * cleared from the clipboard 30 seconds later.
+ * A password is only typed when the focused field reports itself as a password
+ * box: the field that had focus before the panel opened is not reliably the
+ * password field, and a password typed into the wrong one is not a mistake you
+ * can take back. Otherwise `pasted` is false and the password is left on the
+ * clipboard, cleared 30 seconds later.
  */
 export async function pasteCredentialField(
   id: string,
-  field: "username",
+  field: "username" | "password",
 ): Promise<PasteStatus> {
   return invoke<PasteStatus>("paste_credential_field", { id, field });
 }
@@ -269,6 +270,60 @@ export type ResizeDirection =
   | "SouthWest"
   | "West";
 
+/* -- stickies -------------------------------------------------------------- */
+
+/**
+ * Puts the item on screen in its own always-on-top window. It does not pin
+ * the item; Rust keeps retention away from it while the window is open.
+ * Rejects for credentials, and past the cap on open stickies.
+ */
+export async function openSticky(id: string): Promise<void> {
+  return invoke<void>("open_sticky", { id });
+}
+
+/** Closes the sticky for good. */
+export async function closeSticky(id: string): Promise<void> {
+  return invoke<void>("close_sticky", { id });
+}
+
+/** Rust reads the geometry off the window itself; this only says "now". */
+export async function saveStickyGeometry(id: string): Promise<void> {
+  return invoke<void>("save_sticky_geometry", { id });
+}
+
+/** The sticky's paper colour by name; see `STICKY_PAPERS` in theme.ts. */
+export async function getStickyColor(id: string): Promise<string> {
+  return invoke<string>("get_sticky_color", { id });
+}
+
+export async function setStickyColor(id: string, color: string): Promise<void> {
+  return invoke<void>("set_sticky_color", { id, color });
+}
+
+/**
+ * Drag and resize for a sticky. Unlike `startMove`, these do not arm the
+ * panel's drag guard: a sticky has no hide-on-blur to protect against, and
+ * arming the guard from here would switch off the *panel's* click-away
+ * dismissal until it next took focus.
+ */
+export async function startStickyMove(): Promise<void> {
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  await getCurrentWindow().startDragging();
+}
+
+export async function startStickyResize(direction: ResizeDirection): Promise<void> {
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  await getCurrentWindow().startResizeDragging(direction);
+}
+
+/** Fires on every move and resize step of the current window; callers debounce. */
+export async function onWindowGeometry(fn: () => void): Promise<UnlistenFn> {
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  const win = getCurrentWindow();
+  const unlisten = await Promise.all([win.onMoved(() => fn()), win.onResized(() => fn())]);
+  return () => unlisten.forEach((u) => u());
+}
+
 /* -- events emitted by Rust ------------------------------------------------ */
 
 export function onItemAdded(fn: (item: Item) => void): Promise<UnlistenFn> {
@@ -285,6 +340,16 @@ export function onPanelOpened(fn: () => void): Promise<UnlistenFn> {
 
 export function onOpenSettings(fn: () => void): Promise<UnlistenFn> {
   return listen("open-settings", () => fn());
+}
+
+/** A note was saved -- by the panel or by a sticky. Carries the item id. */
+export function onItemUpdated(fn: (id: string) => void): Promise<UnlistenFn> {
+  return listen<string>("item-updated", (e) => fn(e.payload));
+}
+
+/** Settings were saved. Stickies use it to follow theme and accent changes. */
+export function onSettingsChanged(fn: (settings: Settings) => void): Promise<UnlistenFn> {
+  return listen<Settings>("settings-changed", (e) => fn(e.payload));
 }
 
 /* -- export / import -------------------------------------------------------- */

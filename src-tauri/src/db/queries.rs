@@ -1,4 +1,4 @@
-use super::model::{now_millis, Filters, Folder, Item, MatchCount, NewItem};
+use super::model::{now_millis, Filters, Folder, Item, MatchCount, NewItem, StickyGeometry};
 use anyhow::Result;
 use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool};
 
@@ -368,13 +368,15 @@ pub async fn delete_secrets_for(pool: &SqlitePool, ids: &[String]) -> Result<()>
 ///
 /// The predicate is the one `retention::trim_overflow` already enforces on a
 /// timer, so this is the same pruning the app does anyway, on demand and without
-/// the 1000-item threshold. Notes, credentials and pinned clips are not history
-/// -- they were typed or kept deliberately -- and survive.
+/// the 1000-item threshold. Notes, credentials, pinned clips and clips up on
+/// screen as a sticky are not history -- they were typed or kept deliberately
+/// -- and survive.
 pub async fn clear_clip_history(pool: &SqlitePool) -> Result<u64> {
     let now = now_millis();
     let res = sqlx::query(
         "UPDATE items SET deleted_at = ?1, updated_at = ?1
-         WHERE kind = 'clip' AND pinned = 0 AND deleted_at IS NULL",
+         WHERE kind = 'clip' AND pinned = 0 AND deleted_at IS NULL
+           AND id NOT IN (SELECT item_id FROM stickies)",
     )
     .bind(now)
     .execute(pool)
@@ -747,4 +749,83 @@ pub async fn duplicate_exists(
     .fetch_one(pool)
     .await?;
     Ok(row.0 > 0)
+}
+
+/* -- stickies ---------------------------------------------------------------- */
+
+/// Records a sticky as open, or moves an open one. One statement either way, so
+/// a drag that fires a dozen saves cannot leave two rows for one item.
+pub async fn upsert_sticky(pool: &SqlitePool, item_id: &str, geo: StickyGeometry) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO stickies (item_id, x, y, width, height, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT(item_id) DO UPDATE SET
+           x = excluded.x, y = excluded.y,
+           width = excluded.width, height = excluded.height",
+    )
+    .bind(item_id)
+    .bind(geo.x)
+    .bind(geo.y)
+    .bind(geo.width)
+    .bind(geo.height)
+    .bind(now_millis())
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// The sticky's paper colour, or `None` when it has no row (not open).
+pub async fn sticky_color(pool: &SqlitePool, item_id: &str) -> Result<Option<String>> {
+    let row: Option<(String,)> = sqlx::query_as("SELECT color FROM stickies WHERE item_id = ?1")
+        .bind(item_id)
+        .fetch_optional(pool)
+        .await?;
+    Ok(row.map(|(c,)| c))
+}
+
+/// Separate from `upsert_sticky`, whose conflict clause touches only geometry,
+/// so a drag never resets the colour and a colour change never moves the card.
+pub async fn set_sticky_color(pool: &SqlitePool, item_id: &str, color: &str) -> Result<()> {
+    sqlx::query("UPDATE stickies SET color = ?2 WHERE item_id = ?1")
+        .bind(item_id)
+        .bind(color)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn delete_sticky(pool: &SqlitePool, item_id: &str) -> Result<()> {
+    sqlx::query("DELETE FROM stickies WHERE item_id = ?1")
+        .bind(item_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+/// Stickies to reopen at launch. The join drops any whose item was deleted
+/// while the app was running -- a soft delete leaves the row in `stickies`,
+/// and reopening a window onto a deleted item would show nothing useful.
+pub async fn list_stickies(pool: &SqlitePool) -> Result<Vec<(String, StickyGeometry)>> {
+    let rows = sqlx::query(
+        "SELECT s.item_id, s.x, s.y, s.width, s.height
+           FROM stickies s JOIN items i ON i.id = s.item_id
+          WHERE i.deleted_at IS NULL
+          ORDER BY s.created_at",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    rows.iter()
+        .map(|r| {
+            Ok((
+                r.try_get("item_id")?,
+                StickyGeometry {
+                    x: r.try_get("x")?,
+                    y: r.try_get("y")?,
+                    width: r.try_get("width")?,
+                    height: r.try_get("height")?,
+                },
+            ))
+        })
+        .collect()
 }

@@ -21,6 +21,10 @@ pub fn paste_into_previous() -> PasteStatus {
     PasteStatus::unsupported(REASON)
 }
 
+pub fn paste_password_into_previous() -> PasteStatus {
+    PasteStatus::unsupported(REASON)
+}
+
 /// Same reasoning as pasting: no portable way to synthesise Ctrl+C into another
 /// client. The capture shortcut still arms its window, so a manual copy inside
 /// it is saved.

@@ -22,6 +22,7 @@ export function ResultList() {
   const openNote = useStash((s) => s.openNote);
   const openCredential = useStash((s) => s.openCredential);
   const deleteById = useStash((s) => s.deleteById);
+  const popOut = useStash((s) => s.popOut);
 
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -88,6 +89,7 @@ export function ResultList() {
                 onClick={() => select(row.index)}
                 onDoubleClick={() => activate(row.index)}
                 onDelete={deleteById}
+                onPopOut={popOut}
               />
             </div>
           );

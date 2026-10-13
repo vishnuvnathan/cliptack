@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "sticky",
+  "description": "Capabilities for items pinned to the screen. Narrower than the panel's: a sticky never hides or shows windows, and never touches global shortcuts.",
+  "windows": ["sticky-*"],
+  "permissions": [
+    "core:default",
+    "core:event:allow-listen",
+    "core:window:allow-start-dragging",
+    "core:window:allow-start-resize-dragging"
+  ]
+}

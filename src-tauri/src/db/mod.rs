@@ -16,6 +16,8 @@ const MIGRATIONS: &[(&str, &str)] = &[
     ("0003_folders", include_str!("../../migrations/0003_folders.sql")),
     ("0004_secrets", include_str!("../../migrations/0004_secrets.sql")),
     ("0005_power", include_str!("../../migrations/0005_power.sql")),
+    ("0006_stickies", include_str!("../../migrations/0006_stickies.sql")),
+    ("0007_sticky_color", include_str!("../../migrations/0007_sticky_color.sql")),
 ];
 
 /// Shared handle stored in Tauri state. Holds the one pool the whole process
@@ -152,6 +154,8 @@ mod tests {
                 "0003_folders",
                 "0004_secrets",
                 "0005_power",
+                "0006_stickies",
+                "0007_sticky_color",
             ]
         );
     }
@@ -771,5 +775,123 @@ mod tests {
             None,
             "secret outlived the item it belonged to"
         );
+    }
+
+    /// Moving a sticky saves its geometry many times over; that must update the
+    /// one row, never add a second.
+    #[tokio::test]
+    async fn sticky_geometry_upserts_in_place() {
+        let (db, _dir) = fresh_db().await;
+        let item = queries::insert_item(&db.pool, clip("Stuck", "body"), 1)
+            .await
+            .expect("insert");
+
+        let first = model::StickyGeometry { x: 10, y: 20, width: 300, height: 220 };
+        let moved = model::StickyGeometry { x: -1500, y: 40, width: 320, height: 240 };
+        queries::upsert_sticky(&db.pool, &item.id, first).await.expect("open");
+        queries::upsert_sticky(&db.pool, &item.id, moved).await.expect("move");
+
+        assert_eq!(
+            queries::list_stickies(&db.pool).await.expect("list"),
+            vec![(item.id.clone(), moved)]
+        );
+
+        queries::delete_sticky(&db.pool, &item.id).await.expect("close");
+        assert!(queries::list_stickies(&db.pool).await.expect("list").is_empty());
+    }
+
+    /// A card is recoloured once and then dragged around many times; the drags
+    /// must not reset the colour. Closing forgets it, so a reopened card starts
+    /// plain again.
+    #[tokio::test]
+    async fn sticky_color_survives_moves_and_not_a_close() {
+        let (db, _dir) = fresh_db().await;
+        let item = queries::insert_item(&db.pool, clip("Stuck", "body"), 1)
+            .await
+            .expect("insert");
+        let geo = model::StickyGeometry { x: 0, y: 0, width: 300, height: 220 };
+
+        queries::upsert_sticky(&db.pool, &item.id, geo).await.expect("open");
+        assert_eq!(
+            queries::sticky_color(&db.pool, &item.id).await.expect("read").as_deref(),
+            Some("default")
+        );
+
+        queries::set_sticky_color(&db.pool, &item.id, "yellow").await.expect("colour");
+        let moved = model::StickyGeometry { x: 50, ..geo };
+        queries::upsert_sticky(&db.pool, &item.id, moved).await.expect("move");
+        assert_eq!(
+            queries::sticky_color(&db.pool, &item.id).await.expect("read").as_deref(),
+            Some("yellow"),
+            "moving the card reset its colour"
+        );
+
+        queries::delete_sticky(&db.pool, &item.id).await.expect("close");
+        assert_eq!(queries::sticky_color(&db.pool, &item.id).await.expect("read"), None);
+        queries::upsert_sticky(&db.pool, &item.id, geo).await.expect("reopen");
+        assert_eq!(
+            queries::sticky_color(&db.pool, &item.id).await.expect("read").as_deref(),
+            Some("default")
+        );
+    }
+
+    /// A sticky whose item was soft-deleted must not come back at launch, and a
+    /// hard delete must take the row with it.
+    #[tokio::test]
+    async fn stickies_follow_their_item_out() {
+        let (db, _dir) = fresh_db().await;
+        let item = queries::insert_item(&db.pool, clip("Gone", "body"), 1)
+            .await
+            .expect("insert");
+        let geo = model::StickyGeometry { x: 0, y: 0, width: 300, height: 220 };
+        queries::upsert_sticky(&db.pool, &item.id, geo).await.expect("open");
+
+        queries::soft_delete(&db.pool, &item.id).await.expect("soft delete");
+        assert!(
+            queries::list_stickies(&db.pool).await.expect("list").is_empty(),
+            "a sticky for a deleted item would reopen at launch"
+        );
+
+        sqlx::query("DELETE FROM items WHERE id = ?1")
+            .bind(&item.id)
+            .execute(&db.pool)
+            .await
+            .expect("hard delete");
+        let (left,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM stickies")
+            .fetch_one(&db.pool)
+            .await
+            .expect("count");
+        assert_eq!(left, 0, "sticky row outlived its item");
+    }
+
+    /// Opening a sticky does not pin its item, so an unpinned clip that is up on
+    /// screen must survive both the retention timer and "Clear clip history".
+    #[tokio::test]
+    async fn a_clip_open_as_a_sticky_is_not_pruned() {
+        let (db, _dir) = fresh_db().await;
+        let stuck = queries::insert_item(&db.pool, clip("Stuck", "on screen"), 1)
+            .await
+            .expect("insert");
+        let geo = model::StickyGeometry { x: 0, y: 0, width: 300, height: 220 };
+        queries::upsert_sticky(&db.pool, &stuck.id, geo).await.expect("open");
+
+        // All newer than the stuck clip, and comfortably past the retention limit.
+        for i in 0..1100 {
+            queries::insert_item(&db.pool, clip(&format!("clip {i}"), "body"), 10 + i as i64)
+                .await
+                .expect("insert clip");
+        }
+        retention::run_once(&db).await.expect("retention pass");
+        assert!(
+            queries::get(&db.pool, &stuck.id).await.expect("get").is_some(),
+            "retention pruned a clip that is on screen"
+        );
+
+        queries::clear_clip_history(&db.pool).await.expect("clear");
+        let kept = queries::get(&db.pool, &stuck.id)
+            .await
+            .expect("get")
+            .expect("clear history took a clip that is on screen");
+        assert!(!kept.pinned, "the sticky pinned its item");
     }
 }

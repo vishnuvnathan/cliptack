@@ -68,6 +68,14 @@ pub fn paste_into_previous() -> PasteStatus {
     platform::paste_into_previous()
 }
 
+/// `paste_into_previous` for a password: the keystroke is only sent when the
+/// focused control in the target window reports itself as a password box.
+/// Anything else sends nothing -- the caller has already put the password on
+/// the clipboard, so it is still one Ctrl+V away.
+pub fn paste_password_into_previous() -> PasteStatus {
+    platform::paste_password_into_previous()
+}
+
 /// Sends Ctrl+C (Cmd+C) to the focused window so the capture shortcut can copy
 /// the current selection. Blocks while the user releases the shortcut's own
 /// modifiers, so call it off the hotkey thread.
