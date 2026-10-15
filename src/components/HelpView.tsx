@@ -24,6 +24,7 @@ const GROUPS: Array<{ title: string; rows: Row[] }> = [
     title: "Managing items",
     rows: [
       { keys: "Ctrl+N", does: "New note" },
+      { keys: "Ctrl+Shift+N", does: "New note as a sticky on screen" },
       { keys: "Ctrl+K", does: "New credential" },
       { keys: "Ctrl+Shift+E", does: "Edit the selected note or credential" },
       { keys: "Ctrl+P", does: "Pin / unpin" },

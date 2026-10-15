@@ -835,6 +835,32 @@ mod tests {
         );
     }
 
+    /// "Edit as note" moves the card from the clip to the new note: same spot,
+    /// same colour, and the clip no longer counts as on screen.
+    #[tokio::test]
+    async fn rekeying_a_sticky_keeps_its_geometry_and_colour() {
+        let (db, _dir) = fresh_db().await;
+        let clip_item = queries::insert_item(&db.pool, clip("Clip", "body"), 1)
+            .await
+            .expect("insert clip");
+        let note = queries::insert_item(&db.pool, clip("Note", "body"), 2)
+            .await
+            .expect("insert note");
+        let geo = model::StickyGeometry { x: 40, y: 60, width: 300, height: 220 };
+        queries::upsert_sticky(&db.pool, &clip_item.id, geo).await.expect("open");
+        queries::set_sticky_color(&db.pool, &clip_item.id, "green").await.expect("colour");
+
+        queries::rekey_sticky(&db.pool, &clip_item.id, &note.id).await.expect("rekey");
+
+        let rows = queries::list_stickies(&db.pool).await.expect("list");
+        assert_eq!(rows, vec![(note.id.clone(), geo)]);
+        assert_eq!(
+            queries::sticky_color(&db.pool, &note.id).await.expect("read").as_deref(),
+            Some("green")
+        );
+        assert_eq!(queries::sticky_color(&db.pool, &clip_item.id).await.expect("read"), None);
+    }
+
     /// A sticky whose item was soft-deleted must not come back at launch, and a
     /// hard delete must take the row with it.
     #[tokio::test]

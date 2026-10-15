@@ -57,6 +57,7 @@ step into a dependency, set `debug = true` there and expect the space back.
 | `Ctrl+Z` | undo that delete |
 | `Ctrl+P` | pin or unpin |
 | `Ctrl+O` | pin the selected item to the screen as a sticky |
+| `Ctrl+Shift+N` | new note, straight onto the screen as a sticky |
 | `Ctrl+N` | new note |
 | `Ctrl+K` | new credential |
 | `Ctrl+Shift+Enter` | paste the selected credential's password — only into a password field |
@@ -160,7 +161,16 @@ item back on the clipboard.
   typing. A note open in the panel and in a sticky stays in step both ways
   (`item-updated`); if both are edited at once, the last save wins.
 - **Clips are read-only**, for the same reason a transform never rewrites the
-  stored item: the history records what you copied.
+  stored item: the history records what you copied. A text clip has an
+  **Edit as note** button instead: it makes a note from the clip and switches
+  the card to it in place -- same spot, same colour -- leaving the clip as it was.
+- **`Ctrl+Shift+N`** (or **New sticky note** in the tray menu) puts a blank
+  note straight on screen, focused for typing. Closing it while still empty
+  deletes the note (a soft delete, so it can still be restored).
+- **Hide stickies / Show stickies** in the tray menu clears every card off the
+  screen and brings them back, without rebuilding the windows. A global key for
+  it can be set in Settings > Shortcuts; it is off until you pick one, so it
+  never takes a key from another app. Popping something out shows them again.
 - **Credentials cannot be stuck.** The row has no button for one, and Rust
   refuses it as well. A password floating over every window is what the rest of
   the app goes out of its way to prevent.
@@ -175,7 +185,18 @@ item back on the clipboard.
   monitor that is no longer connected falls back to beside the cursor. Deleting
   the item closes its sticky; undoing the delete does not reopen it.
 - Popping out several items in a row without moving the mouse cascades them
-  30px apart rather than stacking them exactly on top of each other.
+  30px apart rather than stacking them exactly on top of each other -- including
+  in a quick burst, where the cards before it are still being built.
+
+**Why `Ctrl+O` is instant, and when it is not.** Creating a WebView2 blocks the
+main thread for ~300-600 ms, and every IPC reply the panel is waiting on queues
+behind it -- that was the freeze. After the first sticky of a session, Stash
+keeps one hidden window with the frontend already loaded, built while the panel
+is hidden. Measured on the debug build: a pop-out from that spare took 4 ms with
+no main-thread stall, against ~390 ms for one built on demand. One spare covers
+one pop-out per panel visit; a burst of four still builds three on demand
+(~2 s of stalls in total). The spare costs one renderer, measured at about
++60 MB private, and is not kept at all until stickies are first used.
 
 **The cost is memory, and it is why there is a cap of eight.** Each sticky is
 its own WebView2 window with its own renderer process. Measured on Windows 11
@@ -187,8 +208,11 @@ its own, which stickies barely move.
 
 Window geometry is a fact about this machine's monitors, so the `stickies`
 table is not part of export/import. The sticky is the same bundle as the panel,
-opened by Rust at `index.html?sticky=<id>`; `main.tsx` renders only the card for
-that URL, with none of the panel's store, hotkeys or hide-on-blur.
+opened by Rust at `index.html?sticky=<id>` (a bare `?sticky` for the spare,
+which is told its item through a `sticky-assign` event); `main.tsx` renders
+only the card for that URL, with none of the panel's store, hotkeys or
+hide-on-blur. Because a spare exists before its item does, window labels are
+`sticky-w<n>` and the item-to-window map lives in `sticky.rs`.
 
 ## Usage-aware ranking
 

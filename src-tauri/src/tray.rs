@@ -1,3 +1,5 @@
+use crate::state::AppState;
+use crate::sticky;
 use crate::window;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -6,6 +8,17 @@ use tauri::{AppHandle, Emitter, Manager};
 /// Kept as managed state so the shortcut label can be updated when the user
 /// rebinds the key.
 struct ShowItem(MenuItem<tauri::Wry>);
+
+/// The hide/show-all item, whose wording follows the current state.
+struct StickiesItem(MenuItem<tauri::Wry>);
+
+/// "Hide stickies" while they are up, "Show stickies" while they are hidden.
+pub fn set_stickies_label(app: &AppHandle, hidden: bool) {
+    let Some(item) = app.try_state::<StickiesItem>() else {
+        return;
+    };
+    let _ = item.0.set_text(if hidden { "Show stickies" } else { "Hide stickies" });
+}
 
 /// Updates the "Show Stash" label to the new shortcut. The label is cosmetic --
 /// the real binding is the global shortcut -- so a string the menu cannot
@@ -27,11 +40,14 @@ pub fn build(app: &AppHandle, toggle_shortcut: &str) -> tauri::Result<()> {
     let show = MenuItem::with_id(app, "show", "Show Stash", true, Some(toggle_shortcut))
         .or_else(|_| MenuItem::with_id(app, "show", "Show Stash", true, None::<&str>))?;
     app.manage(ShowItem(show.clone()));
+    let new_sticky = MenuItem::with_id(app, "new-sticky", "New sticky note", true, None::<&str>)?;
+    let stickies = MenuItem::with_id(app, "stickies", "Hide stickies", true, None::<&str>)?;
+    app.manage(StickiesItem(stickies.clone()));
     let settings = MenuItem::with_id(app, "settings", "Settings\u{2026}", true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Stash", true, None::<&str>)?;
 
-    let menu = Menu::with_items(app, &[&show, &settings, &sep, &quit])?;
+    let menu = Menu::with_items(app, &[&show, &new_sticky, &stickies, &settings, &sep, &quit])?;
 
     let mut builder = TrayIconBuilder::with_id("stash-tray")
         .tooltip("Stash")
@@ -56,6 +72,18 @@ pub fn build(app: &AppHandle, toggle_shortcut: &str) -> tauri::Result<()> {
                     window::show(&win);
                     let _ = win.emit("open-settings", ());
                 }
+            }
+            "new-sticky" => {
+                let app = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    let Some(state) = app.try_state::<AppState>() else { return };
+                    if let Err(e) = sticky::new_note(&app, &state.db).await {
+                        tracing::warn!(error = %e, "could not open a new sticky note");
+                    }
+                });
+            }
+            "stickies" => {
+                sticky::toggle_all(app);
             }
             "quit" => app.exit(0),
             _ => {}

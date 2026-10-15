@@ -121,6 +121,11 @@ pub fn run() {
                     tracing::warn!(error = %e, "capture shortcut could not be registered");
                 }
             }
+            if let Some(stickies) = active.stickies {
+                if let Err(e) = gs.register(stickies) {
+                    tracing::warn!(error = %e, "hide-stickies shortcut could not be registered");
+                }
+            }
 
             sticky::restore_all(handle.clone(), db.clone());
             clipboard::spawn(handle.clone(), db.clone(), self_copy, capture_gate);
@@ -180,6 +185,9 @@ pub fn run() {
             commands::hide_panel,
             commands::begin_window_drag,
             commands::open_sticky,
+            commands::new_sticky_note,
+            commands::sticky_assignment,
+            commands::sticky_edit_as_note,
             commands::close_sticky,
             commands::save_sticky_geometry,
             commands::get_sticky_color,

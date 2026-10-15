@@ -1,5 +1,5 @@
-//! The two global shortcuts: open the panel, and (optionally) copy-and-save the
-//! current selection.
+//! The global shortcuts: open the panel, and two optional ones -- copy-and-save
+//! the current selection, and hide or show every sticky.
 //!
 //! Both are stored as strings in settings.json and parsed here, once, into
 //! `Shortcut` values. Everything that can go wrong with a user-chosen key --
@@ -48,6 +48,8 @@ pub struct Active {
     pub toggle: Shortcut,
     /// `Some` only while capture mode is `Shortcut`.
     pub capture: Option<Shortcut>,
+    /// `Some` only once the user has picked a key for it.
+    pub stickies: Option<Shortcut>,
 }
 
 /// Strict: an invalid string is an error here. Used for what the user just
@@ -58,15 +60,27 @@ pub fn resolve(settings: &Settings) -> Result<Active, String> {
     if toggle == capture {
         return Err("The open-panel shortcut and the capture shortcut must be different".into());
     }
+    let stickies = match settings.stickies_shortcut.as_str() {
+        "" => None,
+        s => Some(parse(s)?),
+    };
+    if stickies == Some(toggle) {
+        return Err("The hide-stickies shortcut and the open-panel shortcut must be different".into());
+    }
+    if stickies == Some(capture) {
+        return Err("The hide-stickies shortcut and the capture shortcut must be different".into());
+    }
     Ok(Active {
         toggle,
         capture: (settings.capture_mode == CaptureMode::Shortcut).then_some(capture),
+        stickies,
     })
 }
 
 fn wanted(active: &Active) -> Vec<Shortcut> {
     let mut v = vec![active.toggle];
     v.extend(active.capture);
+    v.extend(active.stickies);
     v
 }
 
@@ -123,6 +137,8 @@ pub fn on_pressed(app: &AppHandle, received: &Shortcut) {
         window::toggle(app);
     } else if active.capture == Some(*received) {
         capture_selection(&state);
+    } else if active.stickies == Some(*received) {
+        crate::sticky::toggle_all(app);
     }
 }
 
@@ -210,6 +226,16 @@ mod tests {
         assert_eq!(resolve(&s).unwrap().capture, None);
         s.capture_mode = CaptureMode::Shortcut;
         assert!(resolve(&s).unwrap().capture.is_some());
+    }
+
+    #[test]
+    fn stickies_shortcut_is_optional_and_distinct() {
+        let mut s = Settings::default();
+        assert_eq!(resolve(&s).unwrap().stickies, None);
+        s.stickies_shortcut = "Ctrl+Alt+KeyH".into();
+        assert!(resolve(&s).unwrap().stickies.is_some());
+        s.stickies_shortcut = s.toggle_shortcut.clone();
+        assert!(resolve(&s).is_err());
     }
 
     #[test]

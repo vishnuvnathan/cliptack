@@ -1,4 +1,6 @@
-use super::model::{now_millis, Filters, Folder, Item, MatchCount, NewItem, StickyGeometry};
+use super::model::{
+    now_millis, ContentType, Filters, Folder, Item, ItemKind, MatchCount, NewItem, StickyGeometry,
+};
 use anyhow::Result;
 use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool};
 
@@ -50,6 +52,26 @@ pub async fn upsert_by_hash(pool: &SqlitePool, new: NewItem) -> Result<Upsert> {
     }
 
     Ok(Upsert::Inserted(insert_item(pool, new, now).await?))
+}
+
+/// A note as the editor, a blank sticky and "Edit as note" all make it. The
+/// title is the caller's: deriving one from the body is not a storage concern.
+pub async fn insert_note(pool: &SqlitePool, title: String, content: String) -> Result<Item> {
+    insert_item(
+        pool,
+        NewItem {
+            kind: ItemKind::Note,
+            content_type: ContentType::Markdown,
+            content: Some(content),
+            blob_path: None,
+            hash: None,
+            source_app: None,
+            title: Some(title),
+            folder_id: None,
+        },
+        now_millis(),
+    )
+    .await
 }
 
 pub async fn insert_item(pool: &SqlitePool, new: NewItem, now: i64) -> Result<Item> {
@@ -789,6 +811,18 @@ pub async fn set_sticky_color(pool: &SqlitePool, item_id: &str, color: &str) -> 
     sqlx::query("UPDATE stickies SET color = ?2 WHERE item_id = ?1")
         .bind(item_id)
         .bind(color)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+/// Moves a card's row to another item, keeping where it sits and its colour.
+/// For a clip card switched to the note made from it: the clip goes back to
+/// being ordinary history, and the note is what retention now sees on screen.
+pub async fn rekey_sticky(pool: &SqlitePool, from: &str, to: &str) -> Result<()> {
+    sqlx::query("UPDATE stickies SET item_id = ?2 WHERE item_id = ?1")
+        .bind(from)
+        .bind(to)
         .execute(pool)
         .await?;
     Ok(())

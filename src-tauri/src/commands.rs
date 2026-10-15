@@ -397,22 +397,9 @@ pub async fn save_note(
                 .map_err(err("note reload failed"))?
                 .ok_or_else(|| "note no longer exists".to_string())
         }
-        None => queries::insert_item(
-            &state.db.pool,
-            NewItem {
-                kind: ItemKind::Note,
-                content_type: ContentType::Markdown,
-                content: Some(content),
-                blob_path: None,
-                hash: None,
-                source_app: None,
-                title: Some(title),
-                folder_id: None,
-            },
-            now_millis(),
-        )
-        .await
-        .map_err(err("note create failed")),
+        None => queries::insert_note(&state.db.pool, title, content)
+            .await
+            .map_err(err("note create failed")),
     }
 }
 
@@ -586,20 +573,92 @@ pub async fn open_sticky(app: AppHandle, state: State<'_, AppState>, id: String)
     }
 
     let title = item.title.as_deref().unwrap_or("Stash");
-    let geo = sticky::open_window(&app, &id, title, None)?;
-    queries::upsert_sticky(&state.db.pool, &id, geo)
+    match sticky::open_window(&app, &id, title, None, false)? {
+        sticky::Opened::New(geo) => queries::upsert_sticky(&state.db.pool, &id, geo)
+            .await
+            .map_err(err("could not record sticky")),
+        sticky::Opened::Existing => Ok(()),
+    }
+}
+
+/// A blank note straight onto the screen, focused for typing. Returns the
+/// note so the panel can show it in the list.
+#[tauri::command]
+pub async fn new_sticky_note(app: AppHandle, state: State<'_, AppState>) -> CmdResult<Item> {
+    sticky::new_note(&app, &state.db).await
+}
+
+/// Which item the calling sticky window shows. A spare asks on load in case
+/// it was handed its item before it was listening for the hand-over.
+#[tauri::command]
+pub fn sticky_assignment(window: tauri::WebviewWindow) -> Option<String> {
+    sticky::assignment(window.label())
+}
+
+/// Makes an editable note from a clip on screen and switches the card over to
+/// it, in place: same window, same spot, same colour. The clip itself is left
+/// exactly as it was -- the history records what was copied.
+#[tauri::command]
+pub async fn sticky_edit_as_note(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+) -> CmdResult<Item> {
+    let item = queries::get(&state.db.pool, &id)
         .await
-        .map_err(err("could not record sticky"))
+        .map_err(err("load failed"))?
+        .ok_or_else(|| "item no longer exists".to_string())?;
+    if item.kind == ItemKind::Note.as_str() {
+        return Err("this is already a note".to_string());
+    }
+    if item.is_credential() || item.blob_path.is_some() {
+        return Err("only text can be edited as a note".to_string());
+    }
+    if !sticky::is_open(&id) {
+        return Err("this item is not on screen".to_string());
+    }
+
+    let content = item.content.unwrap_or_default();
+    let title = item
+        .title
+        .filter(|t| !t.trim().is_empty())
+        .unwrap_or_else(|| detect::derive_title(&content, 120));
+    let note = queries::insert_note(&state.db.pool, title, content)
+        .await
+        .map_err(err("note create failed"))?;
+
+    queries::rekey_sticky(&state.db.pool, &id, &note.id)
+        .await
+        .map_err(err("could not move sticky to the note"))?;
+    if !sticky::rekey(&app, &id, &note.id) {
+        // Closed in the meantime: undo the row move, keep the note.
+        let _ = queries::delete_sticky(&state.db.pool, &note.id).await;
+    }
+    let _ = app.emit("item-added", &note);
+    Ok(note)
 }
 
 /// The sticky's own close button. Once its row is gone the clip is ordinary
 /// history again, subject to retention like any other unpinned clip.
+///
+/// A note closed while still empty is deleted with its card -- it is what a
+/// blank sticky left untouched becomes, and it would otherwise sit in the list
+/// as "(empty)" forever. It is a soft delete, so it can still be brought back.
 #[tauri::command]
 pub async fn close_sticky(app: AppHandle, state: State<'_, AppState>, id: String) -> CmdResult<()> {
     queries::delete_sticky(&state.db.pool, &id)
         .await
         .map_err(err("could not forget sticky"))?;
     sticky::close_window(&app, &id);
+
+    if let Ok(Some(item)) = queries::get(&state.db.pool, &id).await {
+        let empty = item.content.as_deref().unwrap_or("").trim().is_empty();
+        if item.kind == ItemKind::Note.as_str() && empty {
+            if queries::soft_delete(&state.db.pool, &id).await.is_ok() {
+                let _ = app.emit("item-updated", &id);
+            }
+        }
+    }
     Ok(())
 }
 
@@ -611,12 +670,13 @@ pub async fn save_sticky_geometry(
     state: State<'_, AppState>,
     id: String,
 ) -> CmdResult<()> {
-    let Some(win) = app.get_webview_window(&sticky::label_for(&id)) else {
+    let Some(win) = sticky::window_for(&app, &id) else {
         return Ok(());
     };
     let Some(geo) = sticky::current_geometry(&win) else {
         return Ok(()); // minimised; keep the last real position
     };
+    sticky::remember_geometry(&id, geo);
     queries::upsert_sticky(&state.db.pool, &id, geo)
         .await
         .map_err(err("could not save sticky position"))

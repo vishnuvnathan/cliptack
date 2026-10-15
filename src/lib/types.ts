@@ -119,6 +119,8 @@ export interface Settings {
   captureMode: CaptureMode;
   /** Global shortcut that copies the selection and saves it (captureMode "shortcut"). */
   captureShortcut: string;
+  /** Global shortcut that hides or shows every sticky; empty when not set. */
+  stickiesShortcut: string;
 }
 
 export interface CaptureStatus {

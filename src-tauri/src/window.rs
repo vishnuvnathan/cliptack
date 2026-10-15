@@ -123,9 +123,13 @@ pub fn show(win: &WebviewWindow) {
 
 /// Geometry is written here rather than on every `Moved`/`Resized` event: a
 /// single drag emits hundreds of those, and settings.json is a file.
+///
+/// Also when the next sticky window gets built ahead of time: building one
+/// stalls the main thread, and with the panel down nobody is waiting on it.
 pub fn hide(win: &WebviewWindow) {
     persist_geometry(win);
     let _ = win.hide();
+    crate::sticky::ensure_spare(win.app_handle());
 }
 
 fn restore_size(win: &WebviewWindow) {

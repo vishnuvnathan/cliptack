@@ -149,7 +149,7 @@ export function ShortcutRecorder({
             setRecording(false);
             setHint(null);
           }}
-          aria-label={`${label}: ${formatShortcut(value)}. Click to change.`}
+          aria-label={`${label}: ${formatShortcut(value) || "not set"}. Click to change.`}
           className={[
             "min-w-[9rem] rounded border px-3 py-1 text-left font-mono text-[12px] transition-colors",
             recording
@@ -157,7 +157,7 @@ export function ShortcutRecorder({
               : "border-edge bg-panelalt text-zinc-200 hover:border-zinc-600",
           ].join(" ")}
         >
-          {recording ? "Press a combination…" : formatShortcut(value)}
+          {recording ? "Press a combination…" : formatShortcut(value) || "Not set"}
         </button>
         {recording && <span className="text-[11px] text-zinc-600">Esc cancels</span>}
       </div>

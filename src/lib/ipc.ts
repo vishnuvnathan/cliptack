@@ -281,6 +281,37 @@ export async function openSticky(id: string): Promise<void> {
   return invoke<void>("open_sticky", { id });
 }
 
+/** A blank note straight onto the screen, focused for typing. */
+export async function newStickyNote(): Promise<Item> {
+  return invoke<Item>("new_sticky_note");
+}
+
+/**
+ * Makes an editable note from a clip on screen and switches the card to it
+ * in place. The card hears about the switch through `onStickyAssigned`.
+ */
+export async function stickyEditAsNote(id: string): Promise<Item> {
+  return invoke<Item>("sticky_edit_as_note", { id });
+}
+
+/** The item this sticky window shows, or null for a spare not yet handed one. */
+export async function stickyAssignment(): Promise<string | null> {
+  return invoke<string | null>("sticky_assignment");
+}
+
+/**
+ * Fires when Rust hands this sticky window an item: a spare's first, or the
+ * note a clip card was switched to. Every window hears the event, so it is
+ * filtered to this window's label here.
+ */
+export async function onStickyAssigned(fn: (id: string) => void): Promise<UnlistenFn> {
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  const label = getCurrentWindow().label;
+  return listen<{ label: string; id: string }>("sticky-assign", (e) => {
+    if (e.payload.label === label) fn(e.payload.id);
+  });
+}
+
 /** Closes the sticky for good. */
 export async function closeSticky(id: string): Promise<void> {
   return invoke<void>("close_sticky", { id });

@@ -29,6 +29,8 @@ export interface HotkeyHandlers {
   onPin: () => void;
   /** Ctrl+O: pop the selection out as an always-on-top sticky. */
   onPopOut: () => void;
+  /** Ctrl+Shift+N: a blank note straight onto the screen as a sticky. */
+  onNewSticky: () => void;
   onCopyPassword: () => void;
   /** Ctrl+Shift+Enter: paste the password, but only into a password field. */
   onPastePassword: () => void;
@@ -99,7 +101,8 @@ export function useHotkeys(handlers: HotkeyHandlers, enabled: boolean) {
 
       if (!mod) return;
 
-      // Ctrl+Shift+… are the credential bindings. Checked before the plain
+      // Ctrl+Shift+… are the credential bindings, plus Ctrl+Shift+N for a
+      // blank sticky (next to Ctrl+N, a note in the panel). Checked before the plain
       // Ctrl+… set so Ctrl+Shift+C is not read as a bare Ctrl+C.
       if (e.shiftKey) {
         switch (e.key.toLowerCase()) {
@@ -114,6 +117,10 @@ export function useHotkeys(handlers: HotkeyHandlers, enabled: boolean) {
           case "e":
             e.preventDefault();
             handlers.onEditSelected();
+            break;
+          case "n":
+            e.preventDefault();
+            handlers.onNewSticky();
             break;
         }
         return;

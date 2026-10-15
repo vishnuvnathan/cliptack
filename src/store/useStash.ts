@@ -95,6 +95,8 @@ interface StashState {
   /** Ctrl+O and the row's pop-out button. Both land on `popOut`. */
   popOutSelected: () => Promise<void>;
   popOut: (id: string) => Promise<void>;
+  /** Ctrl+Shift+N: a blank note opened straight onto the screen. */
+  newStickyNote: () => Promise<void>;
 
   loadFolders: () => Promise<void>;
   setFolder: (id: string | null) => void;
@@ -524,6 +526,19 @@ export const useStash = create<StashState>((set, get) => ({
     }
     try {
       await ipc.openSticky(id);
+      set({ error: null });
+    } catch (e) {
+      set({ error: String(e) });
+    }
+  },
+
+  /**
+   * The sticky opens focused, so the panel loses focus and hides itself --
+   * which is the point: the next keystroke belongs to the new card.
+   */
+  async newStickyNote() {
+    try {
+      await ipc.newStickyNote();
       set({ error: null });
     } catch (e) {
       set({ error: String(e) });

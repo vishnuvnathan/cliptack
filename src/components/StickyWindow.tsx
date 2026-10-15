@@ -9,6 +9,7 @@ import {
   getStickyColor,
   onItemUpdated,
   onSettingsChanged,
+  onStickyAssigned,
   onWindowGeometry,
   readBlob,
   saveNote,
@@ -16,6 +17,8 @@ import {
   setStickyColor,
   startStickyMove,
   startStickyResize,
+  stickyAssignment,
+  stickyEditAsNote,
 } from "../lib/ipc";
 import { STICKY_PAPERS, paperFor, paperStyle, useTheme } from "../lib/theme";
 import type { Item, Settings } from "../lib/types";
@@ -28,12 +31,47 @@ const GEOMETRY_MS = 500;
 const MONO = new Set(["code", "json", "path"]);
 
 /**
+ * The root of every sticky window. Holds which item the window shows, which
+ * can change under it: a spare starts with none and is handed one, and a clip
+ * card switches to the note made from it ("Edit as note"). The card is keyed
+ * by id, so a switch starts it fresh rather than carrying one item's state
+ * into another.
+ */
+export function StickyHost({ initialId }: { initialId: string | null }) {
+  const [id, setId] = useState(initialId);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    void onStickyAssigned(setId).then((fn) => {
+      if (cancelled) fn();
+      else unlisten = fn;
+    });
+    // A spare may have been handed its item before the listener above was up.
+    if (!initialId) {
+      void stickyAssignment()
+        .then((assigned) => {
+          if (assigned && !cancelled) setId((current) => current ?? assigned);
+        })
+        .catch(() => undefined);
+    }
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [initialId]);
+
+  return id ? <StickyWindow key={id} id={id} /> : null;
+}
+
+/**
  * One item pinned to the screen. Rendered in its own window, with none of the
  * panel's store: it loads its item by id, follows settings through an event,
  * and talks to Rust only through ipc.ts like everything else.
  *
  * Notes are editable and autosave; everything else is read-only, because the
- * history records what was copied and a sticky is not a way round that.
+ * history records what was copied and a sticky is not a way round that. A
+ * text clip offers "Edit as note" instead, which edits a copy.
  */
 export function StickyWindow({ id }: { id: string }) {
   const [item, setItem] = useState<Item | null>(null);
@@ -178,7 +216,21 @@ export function StickyWindow({ id }: { id: string }) {
     [color, id],
   );
 
+  /**
+   * Clips stay read-only -- the history records what was copied -- so editing
+   * one makes a note from it. Rust switches this window over to the note; the
+   * host above remounts the card on the new id.
+   */
+  const editAsNote = useCallback(async () => {
+    try {
+      await stickyEditAsNote(id);
+    } catch (e) {
+      setError(String(e));
+    }
+  }, [id]);
+
   const isNote = item?.kind === "note";
+  const editable = !!item && !isNote && !item.blobPath && item.contentType !== "image";
   const paper = paperFor(color);
 
   // Ctrl+C with nothing selected copies the whole item: the card *is* the
@@ -228,6 +280,11 @@ export function StickyWindow({ id }: { id: string }) {
         {isNote && (
           <StripButton title={preview ? "Edit (Ctrl+E)" : "Preview (Ctrl+E)"} onClick={() => setPreview((p) => !p)}>
             <span className="px-0.5 text-[10px] uppercase tracking-wide">{preview ? "edit" : "view"}</span>
+          </StripButton>
+        )}
+        {editable && (
+          <StripButton title="Edit as note" onClick={() => void editAsNote()}>
+            <PencilIcon />
           </StripButton>
         )}
         {!missing && (
@@ -292,6 +349,10 @@ function Body({
         onChange={(e) => onEdit(e.target.value)}
         placeholder="Markdown…"
         spellCheck={false}
+        // A blank sticky is opened to be typed into, and a clip switched to a
+        // note was switched to be edited. Focus inside a window the OS has not
+        // activated stays inside it, so a card restored at launch steals nothing.
+        autoFocus
         className="min-h-0 flex-1 resize-none bg-transparent px-3 py-2 font-mono text-[12.5px] leading-6 text-zinc-200 outline-none placeholder:text-zinc-600"
       />
     );
@@ -453,6 +514,22 @@ function CopyIcon() {
     >
       <rect x="5" y="5" width="9" height="9" rx="1.5" />
       <path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5" />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className="h-3 w-3"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M10.5 2.5l3 3L6 13H3v-3z" />
     </svg>
   );
 }

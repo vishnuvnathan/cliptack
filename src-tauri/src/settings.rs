@@ -86,6 +86,10 @@ pub struct Settings {
     /// Global shortcut that copies the current selection and saves it. Only
     /// registered while `capture_mode` is `Shortcut`.
     pub capture_shortcut: String,
+    /// Global shortcut that hides or shows every sticky. Empty means none:
+    /// it is off until the user picks a key, because any default would take
+    /// that key away from every other app for people who never use stickies.
+    pub stickies_shortcut: String,
 }
 
 impl Default for Settings {
@@ -105,6 +109,7 @@ impl Default for Settings {
             toggle_shortcut: shortcuts::DEFAULT_TOGGLE.to_string(),
             capture_mode: CaptureMode::Auto,
             capture_shortcut: shortcuts::DEFAULT_CAPTURE.to_string(),
+            stickies_shortcut: String::new(),
         }
     }
 }
@@ -125,6 +130,10 @@ impl Settings {
             tracing::warn!(error = %e, "invalid capture shortcut; using default");
             self.capture_shortcut = shortcuts::DEFAULT_CAPTURE.to_string();
         }
+        if !self.stickies_shortcut.is_empty() && shortcuts::parse(&self.stickies_shortcut).is_err() {
+            tracing::warn!(shortcut = %self.stickies_shortcut, "invalid stickies shortcut; turning it off");
+            self.stickies_shortcut.clear();
+        }
         // Two actions on one key cannot both work. Put the capture key back
         // first; only if that still collides is the open-panel key touched.
         if shortcuts::same(&self.toggle_shortcut, &self.capture_shortcut) {
@@ -132,6 +141,12 @@ impl Settings {
             if shortcuts::same(&self.toggle_shortcut, &self.capture_shortcut) {
                 self.toggle_shortcut = shortcuts::DEFAULT_TOGGLE.to_string();
             }
+        }
+        // The optional one gives way to both of the others.
+        if shortcuts::same(&self.stickies_shortcut, &self.toggle_shortcut)
+            || shortcuts::same(&self.stickies_shortcut, &self.capture_shortcut)
+        {
+            self.stickies_shortcut.clear();
         }
     }
 }
@@ -209,6 +224,21 @@ mod tests {
         };
         s.sanitize();
         assert!(!shortcuts::same(&s.toggle_shortcut, &s.capture_shortcut));
+    }
+
+    #[test]
+    fn stickies_shortcut_is_off_by_default_and_repaired_to_off() {
+        assert!(Settings::default().stickies_shortcut.is_empty());
+
+        let raw = r#"{"stickiesShortcut":"Ctrl+Nonsense"}"#;
+        let mut s: Settings = serde_json::from_str(raw).unwrap();
+        s.sanitize();
+        assert!(s.stickies_shortcut.is_empty());
+
+        let mut s = Settings { stickies_shortcut: shortcuts::DEFAULT_TOGGLE.into(), ..Settings::default() };
+        s.sanitize();
+        assert!(s.stickies_shortcut.is_empty(), "collided with the open-panel key");
+        assert_eq!(s.toggle_shortcut, shortcuts::DEFAULT_TOGGLE);
     }
 
     #[test]

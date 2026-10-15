@@ -200,6 +200,7 @@ function usePanelHotkeys() {
   const openFolderMenu = useStash((s) => s.openFolderMenu);
   const folderMenuOpen = useStash((s) => s.folderMenuOpen);
   const popOutSelected = useStash((s) => s.popOutSelected);
+  const newStickyNote = useStash((s) => s.newStickyNote);
 
   const onEscape = useCallback(() => {
     void hidePanel();
@@ -253,6 +254,7 @@ function usePanelHotkeys() {
       onHelp: () => setView("help"),
       onPin: () => void pinSelected(),
       onPopOut: () => void popOutSelected(),
+      onNewSticky: () => void newStickyNote(),
       onCopyPassword: () => void copySelectedPassword(),
       onPastePassword: () => void pastePassword(),
       onToggleReveal: () => void revealSelectedPassword(),
@@ -271,6 +273,7 @@ function usePanelHotkeys() {
       setView,
       pinSelected,
       popOutSelected,
+      newStickyNote,
       copySelectedPassword,
       pastePassword,
       revealSelectedPassword,

@@ -142,6 +142,27 @@ function ShortcutsSection({ pasteSupported }: { pasteSupported: boolean }) {
         />
       </div>
 
+      <p className="mt-4 text-[12px] text-zinc-400">Hide or show stickies</p>
+      <div className="mt-1 flex items-start gap-2">
+        <ShortcutRecorder
+          label="Hide or show stickies"
+          value={settings.stickiesShortcut}
+          onChange={(value) => updateSettings({ stickiesShortcut: value }, { quiet: true })}
+        />
+        {settings.stickiesShortcut && (
+          <button
+            onClick={() => void updateSettings({ stickiesShortcut: "" }, { quiet: true })}
+            className="rounded px-2 py-1 text-[11px] text-zinc-500 hover:text-zinc-300"
+          >
+            Turn off
+          </button>
+        )}
+      </div>
+      <p className="mt-1.5 text-[11px] leading-4 text-zinc-600">
+        Clears every sticky off the screen, say before a screen share, and brings them back. Also in
+        the tray menu. Off until you pick a key, so it never takes one from another app.
+      </p>
+
       <p className="mt-4 text-[12px] text-zinc-400">What Stash saves</p>
       <div className="mt-1.5 space-y-1.5" role="radiogroup" aria-label="What Stash saves">
         <CaptureOption
