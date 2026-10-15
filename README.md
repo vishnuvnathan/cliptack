@@ -1,12 +1,50 @@
 # Cliptack
 
-Tray-resident clipboard manager and note-taking app. Local only — the codebase
-makes no network calls, and no dependency that opens a socket is included.
+**A clipboard history for Windows that keeps everything on your machine — and
+lets you tack any clip to your screen.**
 
-v0.1 is the vertical slice described in [PLAN.md](PLAN.md): capture, search,
-notes, and the window behaviour that makes it usable from the keyboard.
+![Cliptack panel demo](docs/media/demo.gif)
 
-**Formerly Stash.** The first launch of Cliptack copies an existing Stash
+**[Download for Windows](https://github.com/vishnuvnathan/cliptack/releases/latest)**
+· Windows 10 and 11 · free and open source ([MIT](LICENSE))
+
+Install it, then press `Ctrl+Shift+V` anywhere to open your history. The
+installer is not code-signed yet, so Windows SmartScreen may say "Windows
+protected your PC": choose **More info → Run anyway**.
+
+## What makes it different
+
+- **Nothing leaves your machine.** The code makes no network calls, and no
+  dependency that opens a socket is included.
+- **Passwords paste only into password fields.** Saved credentials are encrypted
+  with Windows DPAPI, and `Ctrl+Shift+Enter` pastes one only after Windows UI
+  Automation confirms the focused box *is* a password field. Anything else, and
+  nothing is sent.
+- **Hidden from screen shares** by default, so your history never shows up in a
+  meeting.
+- **Tack anything to the screen.** `Ctrl+O` pops a clip — a JSON snippet, an
+  image, a colour — out into a small always-on-top card.
+- **Paste as.** `Ctrl+T` prettifies JSON, decodes base64, changes case and more,
+  without changing what was saved.
+- **Search like a developer.** `app:Code type:code is:pinned "exact phrase"`.
+- **Quiet.** 0.02% CPU and about 31 MB of memory when idle, measured.
+- **Password-manager copies are never recorded.**
+
+None of this is taken on trust: [about 30 behaviours were checked by running the
+app](#what-was-verified-on-windows-11), on top of 117 automated tests.
+
+Windows only for now. The macOS and Linux code is written but has never been
+compiled on those platforms.
+
+The recording above arrows through a stored credential, a note, a link and two
+code snippets; `Ctrl+T` on a JSON clip for the "paste as" menu; then the search
+box, first with the `type:code` operator and then as a plain prefix search. Full
+resolution: [docs/media/demo.mp4](docs/media/demo.mp4). Data shown is seeded demo
+content, not a real clipboard history.
+
+### Upgrading from Stash
+
+Cliptack was called Stash until v0.1. Its first launch copies an existing Stash
 install across -- history, images, notes, credentials and settings -- from
 `%APPDATA%\dev.stash.app` into `%APPDATA%\io.github.vishnuvnathan.cliptack`.
 It copies rather than moves, so the old folder stays behind as a fallback. The
@@ -14,16 +52,6 @@ database is copied with `VACUUM INTO`, a consistent snapshot even while Stash is
 still running. It happens once: when Cliptack already has a database, the Stash
 folder is left alone. Backups made by Stash (`.stashbk` and JSON exports) still
 import. The code is in `src-tauri/src/legacy.rs`.
-
-## Demo
-
-![Cliptack panel demo](docs/media/demo.gif)
-
-Arrowing through a stored credential, a note, a link and two code snippets;
-`Ctrl+T` on a JSON clip for the "paste as" menu; then the search box, first with
-the `type:code` operator and then as a plain prefix search. The same recording at
-full resolution is at [docs/media/demo.mp4](docs/media/demo.mp4). Data shown is
-seeded demo content, not a real clipboard history.
 
 ## Building
 
@@ -33,7 +61,12 @@ npm run tauri dev
 ```
 
 Requires Rust (stable-msvc on Windows) and, on Windows, the VS Build Tools C++
-workload plus a Windows SDK.
+workload plus a Windows SDK. v0.1 is the vertical slice described in
+[PLAN.md](PLAN.md): capture, search, notes, and the window behaviour that makes
+it usable from the keyboard.
+
+**No `D:` drive?** Set `CARGO_TARGET_DIR` to any folder outside a synced
+directory before building; it overrides the `target-dir` below.
 
 **Build artifacts live outside the repo.** `src-tauri/.cargo/config.toml` points
 `target-dir` at `D:/stash-build-target`. Two reasons, both learned
