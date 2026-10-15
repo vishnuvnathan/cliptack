@@ -175,8 +175,12 @@ pub(crate) fn point_on_some_monitor(app: &AppHandle, x: i32, y: i32) -> bool {
     })
 }
 
+/// Position is the outer corner and size is the *inner* size, because those
+/// are what `set_position` and `set_size` take back. The undecorated panel
+/// still has an invisible resize frame, so saving `outer_size` grew the panel
+/// by that frame (~2%) every time it was shown.
 fn persist_geometry(win: &WebviewWindow) {
-    let (Ok(size), Ok(pos)) = (win.outer_size(), win.outer_position()) else {
+    let (Ok(size), Ok(pos)) = (win.inner_size(), win.outer_position()) else {
         return;
     };
     if size.width < MIN_SANE_SIZE || size.height < MIN_SANE_SIZE {
