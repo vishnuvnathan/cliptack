@@ -262,7 +262,7 @@ export function StickyWindow({ id }: { id: string }) {
       style={paperStyle(paper)}
       className="relative flex h-screen w-screen flex-col overflow-hidden rounded-lg border border-edge bg-panel font-ui text-zinc-200 antialiased"
     >
-      {/* The accent band is what tells a Stash card apart from any other
+      {/* The accent band is what tells a Cliptack card apart from any other
           frameless window sitting on top. On a paper it takes the paper's ink. */}
       <div className="h-[3px] shrink-0 bg-accent" />
 
@@ -340,7 +340,7 @@ function Body({
 }) {
   if (item.kind === "note") {
     return preview ? (
-      <div className="prose-stash min-h-0 flex-1 overflow-y-auto px-3 py-2 text-[13px] leading-6 text-zinc-200">
+      <div className="prose-cliptack min-h-0 flex-1 overflow-y-auto px-3 py-2 text-[13px] leading-6 text-zinc-200">
         <ReactMarkdown>{draft || "*Nothing here yet.*"}</ReactMarkdown>
       </div>
     ) : (

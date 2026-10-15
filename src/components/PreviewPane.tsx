@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { readBlob } from "../lib/ipc";
 import { isCredential, type Item } from "../lib/types";
-import { useStash } from "../store/useStash";
+import { useCliptack } from "../store/useCliptack";
 import { CredentialCard } from "./CredentialCard";
 
 /**
@@ -14,10 +14,10 @@ import { CredentialCard } from "./CredentialCard";
  * deliberate click.
  */
 export function PreviewPane() {
-  const items = useStash((s) => s.items);
-  const selected = useStash((s) => s.selected);
-  const folders = useStash((s) => s.folders);
-  const openFolderMenu = useStash((s) => s.openFolderMenu);
+  const items = useCliptack((s) => s.items);
+  const selected = useCliptack((s) => s.selected);
+  const folders = useCliptack((s) => s.folders);
+  const openFolderMenu = useCliptack((s) => s.openFolderMenu);
 
   const item = items[selected];
 
@@ -48,7 +48,7 @@ export function PreviewPane() {
         {item.useCount > 0 && (
           <span
             className="ml-auto shrink-0 text-[11px] tabular-nums text-zinc-500"
-            title="Times copied or pasted from Stash. Rank by this with sort:used"
+            title="Times copied or pasted from Cliptack. Rank by this with sort:used"
           >
             used {item.useCount}×
           </span>
@@ -86,7 +86,7 @@ function Body({ item }: { item: Item }) {
 
   if (item.kind === "note") {
     return (
-      <div className="prose-stash text-[13px] leading-6 text-zinc-200">
+      <div className="prose-cliptack text-[13px] leading-6 text-zinc-200">
         <ReactMarkdown>{item.content || "*This note is empty.*"}</ReactMarkdown>
       </div>
     );

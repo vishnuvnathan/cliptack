@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { getCredential } from "../lib/ipc";
-import { useStash } from "../store/useStash";
+import { useCliptack } from "../store/useCliptack";
 
 /**
  * Sibling of NoteEditor, same Ctrl+S / Esc convention and the same
@@ -13,12 +13,12 @@ import { useStash } from "../store/useStash";
  * with the Clear button.
  */
 export function CredentialEditor() {
-  const editingCredentialId = useStash((s) => s.editingCredentialId);
-  const saveCredential = useStash((s) => s.saveCredential);
-  const setView = useStash((s) => s.setView);
-  const folders = useStash((s) => s.folders);
-  const createFolder = useStash((s) => s.createFolder);
-  const activeFolderId = useStash((s) => s.activeFolderId);
+  const editingCredentialId = useCliptack((s) => s.editingCredentialId);
+  const saveCredential = useCliptack((s) => s.saveCredential);
+  const setView = useCliptack((s) => s.setView);
+  const folders = useCliptack((s) => s.folders);
+  const createFolder = useCliptack((s) => s.createFolder);
+  const activeFolderId = useCliptack((s) => s.activeFolderId);
 
   const [title, setTitle] = useState("");
   const [username, setUsername] = useState("");
@@ -238,7 +238,7 @@ export function CredentialEditor() {
         </Labelled>
 
         <p className="mt-3 rounded-md border border-amber-500/25 bg-amber-500/[0.06] px-2.5 py-2 text-[10.5px] leading-[1.5] text-amber-400/90">
-          Stored unencrypted in stash.db on this machine. Anyone signed into your Windows account
+          Stored unencrypted in cliptack.db on this machine. Anyone signed into your Windows account
           can read it.
         </p>
       </div>

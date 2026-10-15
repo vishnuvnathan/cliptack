@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useStash } from "../store/useStash";
+import { useCliptack } from "../store/useCliptack";
 
 /**
  * Folder chips, rendered inside the existing filter row rather than in a row of
@@ -10,10 +10,10 @@ import { useStash } from "../store/useStash";
  * there are. The rest are still clickable.
  */
 export function FolderBar() {
-  const folders = useStash((s) => s.folders);
-  const activeFolderId = useStash((s) => s.activeFolderId);
-  const setFolder = useStash((s) => s.setFolder);
-  const createFolder = useStash((s) => s.createFolder);
+  const folders = useCliptack((s) => s.folders);
+  const activeFolderId = useCliptack((s) => s.activeFolderId);
+  const setFolder = useCliptack((s) => s.setFolder);
+  const createFolder = useCliptack((s) => s.createFolder);
 
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");

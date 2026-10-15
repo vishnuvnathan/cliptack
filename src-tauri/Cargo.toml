@@ -1,12 +1,12 @@
 [package]
-name = "stash"
+name = "cliptack"
 version = "0.1.0"
 description = "Local-only clipboard manager and notes"
 edition = "2021"
 rust-version = "1.77"
 
 [lib]
-name = "stash_lib"
+name = "cliptack_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

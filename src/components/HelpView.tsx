@@ -1,5 +1,5 @@
 import { isHelpKey, useBackKeys } from "../lib/useBackKeys";
-import { useStash } from "../store/useStash";
+import { useCliptack } from "../store/useCliptack";
 import { formatShortcut } from "./ShortcutRecorder";
 
 interface Row {
@@ -52,20 +52,20 @@ const GROUPS: Array<{ title: string; rows: Row[] }> = [
 ];
 
 export function HelpView() {
-  const settings = useStash((s) => s.settings);
-  const setView = useStash((s) => s.setView);
+  const settings = useCliptack((s) => s.settings);
+  const setView = useCliptack((s) => s.setView);
   useBackKeys(isHelpKey);
 
   const globals: Row[] = [];
   if (settings) {
     globals.push({
       keys: formatShortcut(settings.toggleShortcut),
-      does: "Show / hide Stash from anywhere",
+      does: "Show / hide Cliptack from anywhere",
     });
     if (settings.captureMode === "shortcut") {
       globals.push({
         keys: formatShortcut(settings.captureShortcut),
-        does: "Copy the selection and save it to Stash",
+        does: "Copy the selection and save it to Cliptack",
       });
     }
   }

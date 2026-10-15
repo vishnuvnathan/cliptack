@@ -1,6 +1,6 @@
 import ReactMarkdown from "react-markdown";
 import type { Item } from "../lib/types";
-import { useStash } from "../store/useStash";
+import { useCliptack } from "../store/useCliptack";
 
 interface Props {
   item: Item;
@@ -16,10 +16,10 @@ interface Props {
  * never enters the webview on that path.
  */
 export function CredentialCard({ item }: Props) {
-  const revealed = useStash((s) => s.revealedPassword);
-  const reveal = useStash((s) => s.revealSelectedPassword);
-  const copyUsername = useStash((s) => s.copySelectedUsername);
-  const copyPassword = useStash((s) => s.copySelectedPassword);
+  const revealed = useCliptack((s) => s.revealedPassword);
+  const reveal = useCliptack((s) => s.revealSelectedPassword);
+  const copyUsername = useCliptack((s) => s.copySelectedUsername);
+  const copyPassword = useCliptack((s) => s.copySelectedPassword);
 
   const body = parseBody(item.content);
 
@@ -78,7 +78,7 @@ export function CredentialCard({ item }: Props) {
 
       {body.notes && (
         <Field label="Notes">
-          <div className="prose-stash select-text text-[12px] leading-[1.6] text-zinc-300">
+          <div className="prose-cliptack select-text text-[12px] leading-[1.6] text-zinc-300">
             <ReactMarkdown>{body.notes}</ReactMarkdown>
           </div>
         </Field>

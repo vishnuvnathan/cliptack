@@ -1,7 +1,7 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useEffect, useRef } from "react";
 import { isCredential } from "../lib/types";
-import { useStash } from "../store/useStash";
+import { useCliptack } from "../store/useCliptack";
 import { ResultRow } from "./ResultRow";
 
 const ROW_HEIGHT = 56;
@@ -15,14 +15,14 @@ const ROW_HEIGHT = 56;
 const LIST_WIDTH = "w-[320px] shrink-0";
 
 export function ResultList() {
-  const items = useStash((s) => s.items);
-  const selected = useStash((s) => s.selected);
-  const select = useStash((s) => s.select);
-  const copySelected = useStash((s) => s.copySelected);
-  const openNote = useStash((s) => s.openNote);
-  const openCredential = useStash((s) => s.openCredential);
-  const deleteById = useStash((s) => s.deleteById);
-  const popOut = useStash((s) => s.popOut);
+  const items = useCliptack((s) => s.items);
+  const selected = useCliptack((s) => s.selected);
+  const select = useCliptack((s) => s.select);
+  const copySelected = useCliptack((s) => s.copySelected);
+  const openNote = useCliptack((s) => s.openNote);
+  const openCredential = useCliptack((s) => s.openCredential);
+  const deleteById = useCliptack((s) => s.deleteById);
+  const popOut = useCliptack((s) => s.popOut);
 
   const parentRef = useRef<HTMLDivElement>(null);
 

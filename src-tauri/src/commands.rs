@@ -572,7 +572,7 @@ pub async fn open_sticky(app: AppHandle, state: State<'_, AppState>, id: String)
         return Err("Credentials cannot be pinned to the screen".to_string());
     }
 
-    let title = item.title.as_deref().unwrap_or("Stash");
+    let title = item.title.as_deref().unwrap_or("Cliptack");
     match sticky::open_window(&app, &id, title, None, false)? {
         sticky::Opened::New(geo) => queries::upsert_sticky(&state.db.pool, &id, geo)
             .await
@@ -1065,7 +1065,7 @@ impl ExportFormat {
         match self {
             ExportFormat::Json => "json",
             ExportFormat::Markdown => "md",
-            ExportFormat::Encrypted => "stashbk",
+            ExportFormat::Encrypted => "cliptack",
         }
     }
 }
@@ -1116,7 +1116,7 @@ pub async fn export_data(
         }
     };
 
-    let default_name = format!("stash-export-{}.{}", today_stamp(), format.extension());
+    let default_name = format!("cliptack-export-{}.{}", today_stamp(), format.extension());
     let path = save_dialog(&app, &default_name, format)
         .ok_or_else(|| "export cancelled".to_string())?;
 
@@ -1156,7 +1156,7 @@ pub async fn import_data(
         String::from_utf8(plain).map_err(|_| "the backup is damaged".to_string())?
     } else {
         String::from_utf8(raw).map_err(|_| {
-            "that file is not text; pick a .json export or a .stashbk backup".to_string()
+            "that file is not text; pick a .json export or a .cliptack backup".to_string()
         })?
     };
 
@@ -1178,9 +1178,9 @@ fn save_dialog(app: &AppHandle, default_name: &str, format: ExportFormat) -> Opt
 
     let _guard = window::HideGuard::new();
     let (label, ext) = match format {
-        ExportFormat::Json => ("Stash export", "json"),
+        ExportFormat::Json => ("Cliptack export", "json"),
         ExportFormat::Markdown => ("Markdown", "md"),
-        ExportFormat::Encrypted => ("Stash encrypted backup", "stashbk"),
+        ExportFormat::Encrypted => ("Cliptack encrypted backup", "cliptack"),
     };
 
     app.dialog()
@@ -1197,7 +1197,8 @@ fn open_dialog(app: &AppHandle) -> Option<PathBuf> {
     let _guard = window::HideGuard::new();
     app.dialog()
         .file()
-        .add_filter("Stash export or backup", &["json", "stashbk"])
+        // `stashbk` is what encrypted backups were called before the rename.
+        .add_filter("Cliptack export or backup", &["json", "cliptack", "stashbk"])
         .blocking_pick_file()
         .and_then(|p| p.into_path().ok())
 }

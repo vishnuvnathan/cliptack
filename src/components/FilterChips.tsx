@@ -1,18 +1,18 @@
 import { useEffect, useState } from "react";
 import type { MatchCount } from "../lib/types";
 import { TYPE_CHIPS } from "../lib/types";
-import { useStash } from "../store/useStash";
+import { useCliptack } from "../store/useCliptack";
 import { FolderBar } from "./FolderBar";
 
 export function FilterChips() {
-  const typeChips = useStash((s) => s.typeChips);
-  const toggleTypeChip = useStash((s) => s.toggleTypeChip);
-  const sourceApps = useStash((s) => s.sourceApps);
-  const activeSourceApps = useStash((s) => s.activeSourceApps);
-  const toggleSourceApp = useStash((s) => s.toggleSourceApp);
-  const clearFilters = useStash((s) => s.clearFilters);
-  const activeFolderId = useStash((s) => s.activeFolderId);
-  const query = useStash((s) => s.query);
+  const typeChips = useCliptack((s) => s.typeChips);
+  const toggleTypeChip = useCliptack((s) => s.toggleTypeChip);
+  const sourceApps = useCliptack((s) => s.sourceApps);
+  const activeSourceApps = useCliptack((s) => s.activeSourceApps);
+  const toggleSourceApp = useCliptack((s) => s.toggleSourceApp);
+  const clearFilters = useCliptack((s) => s.clearFilters);
+  const activeFolderId = useCliptack((s) => s.activeFolderId);
+  const query = useCliptack((s) => s.query);
 
   const anyActive =
     typeChips.length > 0 || activeSourceApps.length > 0 || activeFolderId !== null;
@@ -78,12 +78,12 @@ export function FilterChips() {
  * the WebView2 host, the same reason `FolderRow` in Settings confirms this way.
  */
 function DeleteMatching() {
-  const countMatching = useStash((s) => s.countMatching);
-  const deleteMatching = useStash((s) => s.deleteMatching);
-  const query = useStash((s) => s.query);
-  const typeChips = useStash((s) => s.typeChips);
-  const activeSourceApps = useStash((s) => s.activeSourceApps);
-  const activeFolderId = useStash((s) => s.activeFolderId);
+  const countMatching = useCliptack((s) => s.countMatching);
+  const deleteMatching = useCliptack((s) => s.deleteMatching);
+  const query = useCliptack((s) => s.query);
+  const typeChips = useCliptack((s) => s.typeChips);
+  const activeSourceApps = useCliptack((s) => s.activeSourceApps);
+  const activeFolderId = useCliptack((s) => s.activeFolderId);
 
   const [pending, setPending] = useState<MatchCount | null>(null);
 

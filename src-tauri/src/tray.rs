@@ -20,7 +20,7 @@ pub fn set_stickies_label(app: &AppHandle, hidden: bool) {
     let _ = item.0.set_text(if hidden { "Show stickies" } else { "Hide stickies" });
 }
 
-/// Updates the "Show Stash" label to the new shortcut. The label is cosmetic --
+/// Updates the "Show Cliptack" label to the new shortcut. The label is cosmetic --
 /// the real binding is the global shortcut -- so a string the menu cannot
 /// display is logged and the old label stays rather than failing the change.
 pub fn set_toggle_label(app: &AppHandle, shortcut: &str) {
@@ -37,20 +37,20 @@ pub fn set_toggle_label(app: &AppHandle, shortcut: &str) {
 pub fn build(app: &AppHandle, toggle_shortcut: &str) -> tauri::Result<()> {
     // An accelerator the menu cannot parse must not cost the user their tray,
     // which is the only way to quit.
-    let show = MenuItem::with_id(app, "show", "Show Stash", true, Some(toggle_shortcut))
-        .or_else(|_| MenuItem::with_id(app, "show", "Show Stash", true, None::<&str>))?;
+    let show = MenuItem::with_id(app, "show", "Show Cliptack", true, Some(toggle_shortcut))
+        .or_else(|_| MenuItem::with_id(app, "show", "Show Cliptack", true, None::<&str>))?;
     app.manage(ShowItem(show.clone()));
     let new_sticky = MenuItem::with_id(app, "new-sticky", "New sticky note", true, None::<&str>)?;
     let stickies = MenuItem::with_id(app, "stickies", "Hide stickies", true, None::<&str>)?;
     app.manage(StickiesItem(stickies.clone()));
     let settings = MenuItem::with_id(app, "settings", "Settings\u{2026}", true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
-    let quit = MenuItem::with_id(app, "quit", "Quit Stash", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit Cliptack", true, None::<&str>)?;
 
     let menu = Menu::with_items(app, &[&show, &new_sticky, &stickies, &settings, &sep, &quit])?;
 
-    let mut builder = TrayIconBuilder::with_id("stash-tray")
-        .tooltip("Stash")
+    let mut builder = TrayIconBuilder::with_id("cliptack-tray")
+        .tooltip("Cliptack")
         .menu(&menu)
         .show_menu_on_left_click(false);
 

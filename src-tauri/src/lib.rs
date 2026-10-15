@@ -5,6 +5,7 @@ mod clipboard;
 mod commands;
 mod db;
 mod detect;
+mod legacy;
 mod paste;
 mod query;
 mod secret;
@@ -26,8 +27,8 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 pub fn run() {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_env("STASH_LOG")
-                .unwrap_or_else(|_| "stash_lib=info,warn".into()),
+            tracing_subscriber::EnvFilter::try_from_env("CLIPTACK_LOG")
+                .unwrap_or_else(|_| "cliptack_lib=info,warn".into()),
         )
         .init();
 
@@ -54,6 +55,15 @@ pub fn run() {
 
             let config_dir = handle.path().app_config_dir()?;
             let data_dir = handle.path().app_data_dir()?;
+
+            // Before anything opens the settings or the database. A failure stops
+            // the launch: carrying on would create an empty database, which marks
+            // the carry-over done and leaves the user's history behind for good.
+            if tauri::async_runtime::block_on(legacy::carry_over(&data_dir, &config_dir))
+                .map_err(|e| format!("could not carry data over from Stash: {e:#}"))?
+            {
+                tracing::info!("carried data over from Stash");
+            }
 
             let loaded = settings::load(&config_dir);
 
@@ -109,7 +119,7 @@ pub fn run() {
                 }
             }
 
-            // A key another app already owns must not stop Stash from starting:
+            // A key another app already owns must not stop Cliptack from starting:
             // the tray menu still opens the panel, and Settings can pick a
             // different combination.
             let gs = app.global_shortcut();
@@ -207,7 +217,7 @@ pub fn run() {
             commands::import_data,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Stash");
+        .expect("error while running Cliptack");
 }
 
 /// Routes every dismissal through `window::hide` so the panel's size and

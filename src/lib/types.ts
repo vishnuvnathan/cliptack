@@ -27,7 +27,7 @@ export interface Item {
   createdAt: number;
   updatedAt: number;
   folderId: string | null;
-  /** Times copied or pasted *out* of Stash — not the same as `updatedAt`. */
+  /** Times copied or pasted *out* of Cliptack — not the same as `updatedAt`. */
   useCount: number;
   lastUsedAt: number | null;
 }

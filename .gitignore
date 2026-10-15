@@ -24,4 +24,5 @@ Thumbs.db
 # Local env and exported backups — never commit real secrets or clip history
 .env
 .env.*
+*.cliptack
 *.stashbk

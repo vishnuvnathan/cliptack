@@ -30,14 +30,24 @@ pub struct Db {
     pub blob_dir: PathBuf,
 }
 
+/// The database file inside the app data directory. It was `cliptack.db` before
+/// the rename; `legacy` copies that one across.
+pub const DB_FILE: &str = "cliptack.db";
+
 pub async fn init(app_data_dir: &Path) -> Result<Db> {
+    open(app_data_dir, DB_FILE).await
+}
+
+/// `init` with the file name spelled out, so a test can build a database under
+/// the name an older build used.
+pub(crate) async fn open(app_data_dir: &Path, file: &str) -> Result<Db> {
     std::fs::create_dir_all(app_data_dir)
         .with_context(|| format!("creating app data dir {}", app_data_dir.display()))?;
 
     let blob_dir = app_data_dir.join("blobs");
     std::fs::create_dir_all(&blob_dir).context("creating blob dir")?;
 
-    let db_path = app_data_dir.join("stash.db");
+    let db_path = app_data_dir.join(file);
     // Built from a path rather than a URL: a Windows path carries a drive
     // letter and backslashes, which do not survive URL parsing.
     let opts = SqliteConnectOptions::new()
@@ -111,7 +121,7 @@ mod tests {
     /// Each test gets its own database directory, so they can run in parallel
     /// and a failure leaves its evidence behind rather than poisoning the next.
     async fn fresh_db() -> (Db, PathBuf) {
-        let dir = std::env::temp_dir().join(format!("stash-test-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("cliptack-test-{}", uuid::Uuid::new_v4()));
         let db = init(&dir).await.expect("init");
         (db, dir)
     }

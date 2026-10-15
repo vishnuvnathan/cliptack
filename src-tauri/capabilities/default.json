@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capabilities for the Stash panel window",
+  "description": "Capabilities for the Cliptack panel window",
   "windows": ["panel"],
   "permissions": [
     "core:default",

@@ -13,7 +13,7 @@
 //! Container layout, all little-endian-free fixed-width fields:
 //!
 //! ```text
-//! magic    8 bytes   "STASHBK1"
+//! magic    8 bytes   "CLIPTAK1" ("STASHBK1" from before the rename)
 //! salt    16 bytes   Argon2id salt, fresh per archive
 //! nonce   12 bytes   AES-GCM nonce, fresh per archive
 //! body     n bytes   ciphertext, GCM tag included
@@ -29,7 +29,11 @@ use aes_gcm::{Aes256Gcm, Key, Nonce};
 use anyhow::{anyhow, bail, Result};
 use rand::RngCore;
 
-const MAGIC: &[u8; 8] = b"STASHBK1";
+const MAGIC: &[u8; 8] = b"CLIPTAK1";
+/// Written by the app while it was called Stash. Same layout and KDF, so it is
+/// only ever read, never written: a backup someone made before the rename is
+/// still the backup they will reach for.
+const LEGACY_MAGIC: &[u8; 8] = b"STASHBK1";
 const SALT_LEN: usize = 16;
 const NONCE_LEN: usize = 12;
 const KEY_LEN: usize = 32;
@@ -38,7 +42,8 @@ pub const HEADER_LEN: usize = MAGIC.len() + SALT_LEN + NONCE_LEN;
 /// True if these bytes look like one of our archives. Used to tell an encrypted
 /// backup from a plain JSON export without asking the user which it is.
 pub fn is_encrypted(bytes: &[u8]) -> bool {
-    bytes.len() >= MAGIC.len() && &bytes[..MAGIC.len()] == MAGIC
+    bytes.len() >= MAGIC.len()
+        && (&bytes[..MAGIC.len()] == MAGIC || &bytes[..MAGIC.len()] == LEGACY_MAGIC)
 }
 
 fn derive_key(passphrase: &str, salt: &[u8]) -> Result<[u8; KEY_LEN]> {
@@ -77,7 +82,7 @@ pub fn seal(plaintext: &[u8], passphrase: &str) -> Result<Vec<u8>> {
 
 pub fn open(archive: &[u8], passphrase: &str) -> Result<Vec<u8>> {
     if !is_encrypted(archive) {
-        bail!("this file is not a Stash encrypted backup");
+        bail!("this file is not a Cliptack encrypted backup");
     }
     if archive.len() <= HEADER_LEN {
         bail!("this backup is truncated");
@@ -103,7 +108,7 @@ mod tests {
 
     #[test]
     fn round_trips() {
-        let plain = br#"{"format":"stash-export","items":[]}"#;
+        let plain = br#"{"format":"cliptack-export","items":[]}"#;
         let sealed = seal(plain, "correct horse battery staple").unwrap();
         assert!(is_encrypted(&sealed));
         assert_eq!(open(&sealed, "correct horse battery staple").unwrap(), plain);
@@ -150,9 +155,19 @@ mod tests {
         assert_eq!(open(&b, "pw").unwrap(), b"same");
     }
 
+    /// A backup made before the rename differs only in its magic, and must
+    /// still open.
+    #[test]
+    fn opens_a_backup_made_as_stash() {
+        let mut sealed = seal(b"from before the rename", "pw").unwrap();
+        sealed[..LEGACY_MAGIC.len()].copy_from_slice(LEGACY_MAGIC);
+        assert!(is_encrypted(&sealed));
+        assert_eq!(open(&sealed, "pw").unwrap(), b"from before the rename");
+    }
+
     #[test]
     fn rejects_foreign_and_truncated_files() {
-        assert!(open(b"{\"format\":\"stash-export\"}", "pw").is_err());
+        assert!(open(b"{\"format\":\"cliptack-export\"}", "pw").is_err());
         assert!(!is_encrypted(b"{"));
         let sealed = seal(b"x", "pw").unwrap();
         assert!(open(&sealed[..HEADER_LEN], "pw").is_err());

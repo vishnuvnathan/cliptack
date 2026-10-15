@@ -90,7 +90,7 @@ mod file_tests {
     use super::*;
 
     fn temp(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("stash-test-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("cliptack-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         dir.join(name)
     }
@@ -152,7 +152,7 @@ pub fn spawn(app: AppHandle, db: Db, guard: SelfCopyGuard, gate: CaptureGate) {
     let thread_guard = guard.clone();
 
     std::thread::Builder::new()
-        .name("stash-clipboard".into())
+        .name("cliptack-clipboard".into())
         .spawn(move || {
             let mut state = PollState::default();
             loop {

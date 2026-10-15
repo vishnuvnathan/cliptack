@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { getItem } from "../lib/ipc";
-import { useStash } from "../store/useStash";
+import { useCliptack } from "../store/useCliptack";
 
 export function NoteEditor() {
-  const editingNoteId = useStash((s) => s.editingNoteId);
-  const saveNote = useStash((s) => s.saveNote);
-  const setView = useStash((s) => s.setView);
+  const editingNoteId = useCliptack((s) => s.editingNoteId);
+  const saveNote = useCliptack((s) => s.saveNote);
+  const setView = useCliptack((s) => s.setView);
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -76,7 +76,7 @@ export function NoteEditor() {
       </div>
 
       {preview ? (
-        <div className="prose-stash min-h-0 flex-1 overflow-y-auto px-4 py-3 text-[13px] leading-6 text-zinc-200">
+        <div className="prose-cliptack min-h-0 flex-1 overflow-y-auto px-4 py-3 text-[13px] leading-6 text-zinc-200">
           <ReactMarkdown>{content || "*Nothing to preview yet.*"}</ReactMarkdown>
         </div>
       ) : (

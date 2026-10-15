@@ -67,7 +67,7 @@ pub fn poll(state: &mut PollState) -> Snapshot {
     state.last_change = seq;
 
     // The first tick after launch establishes the baseline. Recording whatever
-    // happened to be on the clipboard before Stash started would be surprising.
+    // happened to be on the clipboard before Cliptack started would be surprising.
     if !state.primed {
         state.primed = true;
         return Snapshot::Unchanged;

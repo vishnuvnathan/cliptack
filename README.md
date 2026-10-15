@@ -1,4 +1,4 @@
-# Stash
+# Cliptack
 
 Tray-resident clipboard manager and note-taking app. Local only — the codebase
 makes no network calls, and no dependency that opens a socket is included.
@@ -6,9 +6,18 @@ makes no network calls, and no dependency that opens a socket is included.
 v0.1 is the vertical slice described in [PLAN.md](PLAN.md): capture, search,
 notes, and the window behaviour that makes it usable from the keyboard.
 
+**Formerly Stash.** The first launch of Cliptack copies an existing Stash
+install across -- history, images, notes, credentials and settings -- from
+`%APPDATA%\dev.stash.app` into `%APPDATA%\io.github.vishnuvnathan.cliptack`.
+It copies rather than moves, so the old folder stays behind as a fallback. The
+database is copied with `VACUUM INTO`, a consistent snapshot even while Stash is
+still running. It happens once: when Cliptack already has a database, the Stash
+folder is left alone. Backups made by Stash (`.stashbk` and JSON exports) still
+import. The code is in `src-tauri/src/legacy.rs`.
+
 ## Demo
 
-![Stash panel demo](docs/media/demo.gif)
+![Cliptack panel demo](docs/media/demo.gif)
 
 Arrowing through a stored credential, a note, a link and two code snippets;
 `Ctrl+T` on a JSON clip for the "paste as" menu; then the search box, first with
@@ -81,11 +90,11 @@ All in **Settings**.
   include Ctrl, Alt or Shift. If the key is refused (another app owns it, or it
   matches the capture shortcut) the old binding stays in force and the reason is
   shown under the field. Keys another app has registered globally never reach
-  the field at all, and neither do Stash's own current shortcuts.
-- **What Stash saves** — *Everything I copy* is the default. *Only what I choose*
+  the field at all, and neither do Cliptack's own current shortcuts.
+- **What Cliptack saves** — *Everything I copy* is the default. *Only what I choose*
   ignores ordinary Ctrl+C entirely: select something and press the capture
-  shortcut (`Ctrl+Alt+C` by default) and Stash copies it and keeps exactly that
-  one item. With nothing selected nothing is saved. On macOS and Linux Stash
+  shortcut (`Ctrl+Alt+C` by default) and Cliptack copies it and keeps exactly that
+  one item. With nothing selected nothing is saved. On macOS and Linux Cliptack
   cannot send the copy keystroke for you, so press the shortcut first and then
   copy within a couple of seconds. Anything a password manager marks private is
   never saved in either mode.
@@ -178,7 +187,7 @@ item back on the clipboard.
   row. Retention and "Clear clip history" skip any clip that has a sticky open
   instead, so a card on screen is never emptied. Once the sticky is closed the
   clip is ordinary history again.
-- **Stickies follow the capture-exclusion setting** ("Hide Stash from screen
+- **Stickies follow the capture-exclusion setting** ("Hide Cliptack from screen
   capture"), on by default, so a card on screen does not leak into a screen
   share. Toggling the setting re-applies it to every open sticky.
 - **They come back after a restart**, where you left them. A position on a
@@ -190,7 +199,7 @@ item back on the clipboard.
 
 **Why `Ctrl+O` is instant, and when it is not.** Creating a WebView2 blocks the
 main thread for ~300-600 ms, and every IPC reply the panel is waiting on queues
-behind it -- that was the freeze. After the first sticky of a session, Stash
+behind it -- that was the freeze. After the first sticky of a session, Cliptack
 keeps one hidden window with the frontend already loaded, built while the panel
 is hidden. Measured on the debug build: a pop-out from that spare took 4 ms with
 no main-thread stall, against ~390 ms for one built on demand. One spare covers
@@ -201,9 +210,9 @@ one pop-out per panel visit; a burst of four still builds three on demand
 **The cost is memory, and it is why there is a cap of eight.** Each sticky is
 its own WebView2 window with its own renderer process. Measured on Windows 11
 with the debug build: the app with no stickies was 205 MB private across 8
-processes (`stash.exe` alone ~10 MB private), and each sticky added roughly
+processes (`cliptack.exe` alone ~10 MB private), and each sticky added roughly
 27-32 MB private (about 55-65 MB working set). Eight open stickies is therefore
-about +250 MB. The idle figures elsewhere in this README are for `stash.exe` on
+about +250 MB. The idle figures elsewhere in this README are for `cliptack.exe` on
 its own, which stickies barely move.
 
 Window geometry is a fact about this machine's monitors, so the `stickies`
@@ -216,7 +225,7 @@ hide-on-blur. Because a spare exists before its item does, window labels are
 
 ## Usage-aware ranking
 
-`items.use_count` counts the times an item was copied or pasted *out* of Stash,
+`items.use_count` counts the times an item was copied or pasted *out* of Cliptack,
 and `sort:used` ranks by it. This is not `updated_at`: that column moves every
 time the watcher sees the same content again, so copying something once a day
 and reaching for a stored snippet forty times look identical through it.
@@ -227,8 +236,8 @@ opposite of what a history is for — there is a test for exactly that.
 
 ## Getting your data out
 
-Stash holds the only copy of your credentials, and DPAPI seals them to one
-Windows account -- so `stash.db` is unreadable on the machine you would be
+Cliptack holds the only copy of your credentials, and DPAPI seals them to one
+Windows account -- so `cliptack.db` is unreadable on the machine you would be
 migrating *to*. That is what makes an export path a requirement rather than a
 nicety, and why the encrypted format uses a passphrase instead of DPAPI.
 
@@ -236,7 +245,7 @@ Settings -> **Backup and restore**. Three formats:
 
 | Format | Contains | Re-importable |
 |---|---|---|
-| Encrypted backup (`.stashbk`) | everything, passwords included, sealed with a passphrase | yes |
+| Encrypted backup (`.cliptack`) | everything, passwords included, sealed with a passphrase | yes |
 | JSON | everything; passwords only if you tick the box | yes |
 | Markdown | readable notes, clips and credential fields | no |
 
@@ -325,7 +334,7 @@ Content the copying app marked as secret is skipped before any bytes are read:
 
 Images over 10MB are skipped. The first clipboard state after launch is used as
 a baseline and never stored, so whatever happened to be on the clipboard before
-you started Stash is not swept up.
+you started Cliptack is not swept up.
 
 ## Screen-capture exclusion
 
@@ -334,7 +343,7 @@ platform actually did rather than assuming it worked.
 
 - **Windows** — `SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)`. That
   flag needs Windows 10 build 19041; on older builds the call is rejected and
-  Stash falls back to `WDA_MONITOR`, which blanks the panel in recordings rather
+  Cliptack falls back to `WDA_MONITOR`, which blanks the panel in recordings rather
   than hiding it. The settings panel says so when this happens.
 - **macOS** — `NSWindow.sharingType = NSWindowSharingNone`.
 - **Linux** — unsupported. A compositor decides what a screencast sees and there
@@ -343,7 +352,9 @@ platform actually did rather than assuming it worked.
 
 ## What was verified on Windows 11
 
-Checked by running the app, not by reading the code:
+Checked by running the app, not by reading the code. These checks ran before
+the app was renamed from Stash, so two rows name what it wrote then: the
+`Run\Stash` startup value, and a `.stashbk` backup starting `STASHBK1`.
 
 | Behaviour | Result |
 |---|---|
@@ -358,7 +369,7 @@ Checked by running the app, not by reading the code:
 | Hide on blur | panel hides within ~100ms of losing focus |
 | FTS5 search | a query narrowed 9 items to the 2 matching rows, ranked |
 | Notes | Ctrl+N, edit, Ctrl+S persists `kind='note'`, `content_type='markdown'`, title derived from the first line |
-| Paste on Enter | copied one string, buried it under a decoy, opened the panel from a plain Win32 window, searched, pressed Enter — the **searched** string arrived in that window, so Stash both replaced the clipboard and delivered the keystroke |
+| Paste on Enter | copied one string, buried it under a decoy, opened the panel from a plain Win32 window, searched, pressed Enter — the **searched** string arrived in that window, so Cliptack both replaced the clipboard and delivered the keystroke |
 | `Ctrl+Enter` | same sequence: clipboard updated, target window untouched |
 | DPAPI at rest | the live database's `item_secrets` rows all read `enc='dpapi.v1'` with no plaintext in the column, and the blobs decrypt through `[System.Security.Cryptography.ProtectedData]` — a different implementation than the one that wrote them |
 | Upgrade pass | ran against the real database; both existing credentials re-sealed and still return their original passwords |
@@ -407,7 +418,7 @@ have had nothing to write to. Migrations are still the numbered files in
 `src-tauri/migrations/`, embedded with `include_str!` and applied in order, each
 in its own transaction, tracked in a `_migrations` table.
 
-One SQLite database at `<app data>/stash.db`, WAL mode. Clips and notes share
+One SQLite database at `<app data>/cliptack.db`, WAL mode. Clips and notes share
 the `items` table, which is why a note turns up in the same search as a clip
 with no special-casing on either side. Full-text search is an FTS5
 external-content table kept in sync by triggers.
@@ -455,9 +466,9 @@ except the two secret helpers.
 
 On Windows each one is sealed with DPAPI (`CryptProtectData`) under your account
 and stored hex-encoded, with `item_secrets.enc` set to `dpapi.v1`. A copy of
-`stash.db` is therefore useless on another machine or under another Windows
+`cliptack.db` is therefore useless on another machine or under another Windows
 account. It is **not** protection against a program running as you: that program
-can ask Windows to decrypt it exactly as Stash does. The settings panel says so
+can ask Windows to decrypt it exactly as Cliptack does. The settings panel says so
 rather than claiming more.
 
 `secret.rs` is the only place a secret is encoded or decoded, which is what let
@@ -485,7 +496,7 @@ and returns after a single `COUNT` when there is nothing to do.
 src/                      React panel
   lib/ipc.ts              the only module that calls invoke()
   lib/types.ts            mirrors the Rust serde types
-  store/useStash.ts       zustand store
+  store/useCliptack.ts       zustand store
 src-tauri/
   migrations/             numbered .sql, applied in order, embedded at build time
   src/clipboard/          watcher + per-platform readers

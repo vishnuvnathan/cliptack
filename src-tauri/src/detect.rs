@@ -173,7 +173,7 @@ mod tests {
     #[test]
     fn paths() {
         assert_eq!(classify(r"C:\Users\Dell\file.txt"), ContentType::Path);
-        assert_eq!(classify("/usr/local/bin/stash"), ContentType::Path);
+        assert_eq!(classify("/usr/local/bin/cliptack"), ContentType::Path);
         assert_eq!(classify("~/notes/todo.md"), ContentType::Path);
         assert_eq!(classify("/"), ContentType::Text);
     }

@@ -27,7 +27,7 @@ export interface DeletedItem {
   secretErased: boolean;
 }
 
-interface StashState {
+interface CliptackState {
   query: string;
   items: Item[];
   selected: number;
@@ -159,7 +159,7 @@ function buildFilters(
   };
 }
 
-export const useStash = create<StashState>((set, get) => ({
+export const useCliptack = create<CliptackState>((set, get) => ({
   query: "",
   items: [],
   selected: 0,

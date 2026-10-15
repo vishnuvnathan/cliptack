@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react";
 import { onPanelOpened } from "../lib/ipc";
-import { useStash } from "../store/useStash";
+import { useCliptack } from "../store/useCliptack";
 
 export function SearchBar() {
-  const query = useStash((s) => s.query);
-  const setQuery = useStash((s) => s.setQuery);
-  const count = useStash((s) => s.items.length);
+  const query = useCliptack((s) => s.query);
+  const setQuery = useCliptack((s) => s.setQuery);
+  const count = useCliptack((s) => s.items.length);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Rust emits `panel-opened` on every show, so the box is focused and its

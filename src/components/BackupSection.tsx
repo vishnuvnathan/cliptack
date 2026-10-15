@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { exportData, importData } from "../lib/ipc";
 import type { ExportFormat, ExportReport, ImportReport } from "../lib/types";
-import { useStash } from "../store/useStash";
+import { useCliptack } from "../store/useCliptack";
 
 /**
  * Export and import, in the settings panel.
  *
- * The answer to "what happens when I want to leave". Everything else in Stash
+ * The answer to "what happens when I want to leave". Everything else in Cliptack
  * is local-only and DPAPI-sealed to one Windows account, which is exactly what
  * makes a way out necessary rather than optional.
  *
@@ -16,7 +16,7 @@ import { useStash } from "../store/useStash";
  * to decide.
  */
 export function BackupSection() {
-  const refresh = useStash((s) => s.refresh);
+  const refresh = useCliptack((s) => s.refresh);
 
   const [format, setFormat] = useState<ExportFormat>("encrypted");
   const [includeSecrets, setIncludeSecrets] = useState(false);

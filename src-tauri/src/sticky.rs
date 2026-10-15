@@ -326,7 +326,7 @@ pub fn ensure_spare(app: &AppHandle) {
             None
         } else {
             let label = reg().new_label();
-            match build(&app, &label, None, "Stash") {
+            match build(&app, &label, None, "Cliptack") {
                 Ok(win) => {
                     capture::apply(&win, capture_exclusion(&app));
                     Some(label)
@@ -469,7 +469,7 @@ pub async fn new_note(app: &AppHandle, db: &Db) -> Result<Item, String> {
     let item = queries::insert_note(&db.pool, String::new(), String::new())
         .await
         .map_err(|e| format!("note create failed: {e}"))?;
-    let title = item.title.as_deref().unwrap_or("Stash");
+    let title = item.title.as_deref().unwrap_or("Cliptack");
     match open_window(app, &item.id, title, None, true) {
         Ok(Opened::New(geo)) => {
             queries::upsert_sticky(&db.pool, &item.id, geo)
@@ -508,7 +508,7 @@ pub fn restore_all(app: AppHandle, db: Db) {
             if i > 0 {
                 tokio::time::sleep(RESTORE_GAP).await;
             }
-            let title = item.title.as_deref().unwrap_or("Stash");
+            let title = item.title.as_deref().unwrap_or("Cliptack");
             if let Err(e) = open_window(&app, &id, title, Some(geo), false) {
                 tracing::warn!(error = %e, "could not restore sticky");
             }

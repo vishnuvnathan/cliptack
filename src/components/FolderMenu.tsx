@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useStash } from "../store/useStash";
+import { useCliptack } from "../store/useCliptack";
 
 /**
  * The "move to folder" menu, opened with Ctrl+M.
@@ -10,12 +10,12 @@ import { useStash } from "../store/useStash";
  * panel's own bindings would otherwise move the selection underneath it.
  */
 export function FolderMenu() {
-  const open = useStash((s) => s.folderMenuOpen);
-  const folders = useStash((s) => s.folders);
-  const item = useStash((s) => s.items[s.selected]);
-  const close = useStash((s) => s.closeFolderMenu);
-  const assign = useStash((s) => s.assignSelectedToFolder);
-  const createFolder = useStash((s) => s.createFolder);
+  const open = useCliptack((s) => s.folderMenuOpen);
+  const folders = useCliptack((s) => s.folders);
+  const item = useCliptack((s) => s.items[s.selected]);
+  const close = useCliptack((s) => s.closeFolderMenu);
+  const assign = useCliptack((s) => s.assignSelectedToFolder);
+  const createFolder = useCliptack((s) => s.createFolder);
 
   const [active, setActive] = useState(0);
   const [naming, setNaming] = useState(false);

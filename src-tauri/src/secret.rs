@@ -5,7 +5,7 @@
 //!
 //! On Windows a secret is sealed with DPAPI (`CryptProtectData`) under the
 //! logged-in user's key and stored hex-encoded, with `item_secrets.enc` set to
-//! `"dpapi.v1"`. `stash.db` copied to another machine, or read from another
+//! `"dpapi.v1"`. `cliptack.db` copied to another machine, or read from another
 //! Windows account, is useless. A program running as *you* can still call
 //! `CryptUnprotectData` on it -- DPAPI does not defend against that, and the
 //! settings panel says so.
@@ -93,7 +93,7 @@ mod win {
     use windows::core::PCWSTR;
 
     /// Shown in the Windows credential-recovery UI if it is ever surfaced.
-    const DESCRIPTION: &str = "Stash credential";
+    const DESCRIPTION: &str = "Cliptack credential";
 
     /// Owns a blob DPAPI allocated with `LocalAlloc`. Zeroes the bytes before
     /// freeing them, so a decrypted password does not linger in freed heap, and

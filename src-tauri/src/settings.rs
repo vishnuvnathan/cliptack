@@ -18,7 +18,7 @@ pub enum Theme {
 
 /// How clipboard changes become history entries.
 ///
-/// `Auto` records every copy, which is what Stash has always done. `Shortcut`
+/// `Auto` records every copy, which is what Cliptack has always done. `Shortcut`
 /// records only what the user explicitly sends with the capture shortcut, for
 /// people who copy a lot of things they never want kept.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -151,7 +151,7 @@ impl Settings {
     }
 }
 
-fn path(config_dir: &Path) -> PathBuf {
+pub(crate) fn path(config_dir: &Path) -> PathBuf {
     config_dir.join("settings.json")
 }
 

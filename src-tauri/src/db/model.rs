@@ -71,7 +71,7 @@ pub struct Item {
     pub created_at: i64,
     pub updated_at: i64,
     pub folder_id: Option<String>,
-    /// Times this item has been copied or pasted *out* of Stash. Distinct from
+    /// Times this item has been copied or pasted *out* of Cliptack. Distinct from
     /// `updated_at`, which also moves when the watcher re-sees the content.
     pub use_count: i64,
     pub last_used_at: Option<i64>,

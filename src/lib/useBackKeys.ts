@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useStash } from "../store/useStash";
+import { useCliptack } from "../store/useCliptack";
 
 /**
  * Esc, or the key that opened the screen, returns to the list. Bubble phase on
@@ -8,7 +8,7 @@ import { useStash } from "../store/useStash";
  * leave the screen.
  */
 export function useBackKeys(opener: (e: KeyboardEvent) => boolean) {
-  const setView = useStash((s) => s.setView);
+  const setView = useCliptack((s) => s.setView);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {

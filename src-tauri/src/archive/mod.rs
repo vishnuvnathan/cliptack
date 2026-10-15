@@ -25,7 +25,10 @@ pub mod io;
 use crate::db::model::{now_millis, Item};
 use serde::{Deserialize, Serialize};
 
-pub const FORMAT: &str = "stash-export";
+pub const FORMAT: &str = "cliptack-export";
+/// What exports said before the app was renamed from Stash. Accepted on import,
+/// never written.
+const LEGACY_FORMAT: &str = "stash-export";
 pub const VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -134,15 +137,15 @@ impl Archive {
             serde_json::from_str(raw).map_err(|e| format!("not a valid JSON file: {e}"))?;
 
         match probe.get("format").and_then(|v| v.as_str()) {
-            Some(FORMAT) => {}
-            Some(other) => return Err(format!("this is a '{other}' file, not a Stash export")),
-            None => return Err("this JSON is not a Stash export".to_string()),
+            Some(FORMAT | LEGACY_FORMAT) => {}
+            Some(other) => return Err(format!("this is a '{other}' file, not a Cliptack export")),
+            None => return Err("this JSON is not a Cliptack export".to_string()),
         }
 
         let version = probe.get("version").and_then(|v| v.as_u64()).unwrap_or(0);
         if version > VERSION as u64 {
             return Err(format!(
-                "this export was written by a newer version of Stash (format {version}); \
+                "this export was written by a newer version of Cliptack (format {version}); \
                  this build understands up to {VERSION}"
             ));
         }
@@ -156,7 +159,7 @@ impl Archive {
 /// not meant to be. The JSON and encrypted forms are the ones that can.
 pub fn to_markdown(archive: &Archive) -> String {
     let mut out = String::new();
-    out.push_str("# Stash export\n\n");
+    out.push_str("# Cliptack export\n\n");
     out.push_str(&format!(
         "{} items · exported {}\n\n",
         archive.items.len(),
@@ -320,6 +323,15 @@ mod tests {
         assert!(json.contains("\"includesSecrets\": false"));
     }
 
+    /// Exports written before the rename say `stash-export`. They are still
+    /// ours, and still import.
+    #[test]
+    fn accepts_an_export_made_as_stash() {
+        let json = sample(true).to_json().unwrap().replace(FORMAT, LEGACY_FORMAT);
+        assert!(json.contains("\"stash-export\""));
+        assert_eq!(Archive::from_json(&json).unwrap().items.len(), 2);
+    }
+
     #[test]
     fn rejects_foreign_json() {
         assert!(Archive::from_json("{\"format\":\"bitwarden\"}").is_err());
@@ -331,7 +343,7 @@ mod tests {
     /// half-imported through serde defaults.
     #[test]
     fn refuses_a_newer_format() {
-        let err = Archive::from_json(r#"{"format":"stash-export","version":99}"#)
+        let err = Archive::from_json(r#"{"format":"cliptack-export","version":99}"#)
             .unwrap_err();
         assert!(err.contains("newer version"), "unhelpful: {err}");
     }

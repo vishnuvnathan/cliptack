@@ -5,12 +5,12 @@ import { securityInfo, setCaptureExclusion } from "../lib/ipc";
 import { isSettingsKey, useBackKeys } from "../lib/useBackKeys";
 import { ACCENT_PRESETS, isHex } from "../lib/theme";
 import type { CaptureStatus, SecurityInfo, ThemeMode } from "../lib/types";
-import { useStash } from "../store/useStash";
+import { useCliptack } from "../store/useCliptack";
 
 export function Settings() {
-  const settings = useStash((s) => s.settings);
-  const updateSettings = useStash((s) => s.updateSettings);
-  const setView = useStash((s) => s.setView);
+  const settings = useCliptack((s) => s.settings);
+  const updateSettings = useCliptack((s) => s.updateSettings);
+  const setView = useCliptack((s) => s.setView);
   useBackKeys(isSettingsKey);
 
   const [capture, setCapture] = useState<CaptureStatus | null>(null);
@@ -77,7 +77,7 @@ export function Settings() {
         />
 
         <Toggle
-          label="Hide Stash from screen capture"
+          label="Hide Cliptack from screen capture"
           description={captureDescription(capture)}
           checked={settings.captureExclusion}
           disabled={capture ? !capture.supported : false}
@@ -93,7 +93,7 @@ export function Settings() {
 
         <Toggle
           label="Launch on startup"
-          description="Start Stash with Windows, straight to the tray."
+          description="Start Cliptack with Windows, straight to the tray."
           checked={settings.launchOnStartup}
           onChange={(v) => void updateSettings({ launchOnStartup: v })}
         />
@@ -107,7 +107,7 @@ export function Settings() {
         <HistorySection />
 
         <div className="mt-5 border-t border-edge pt-3 text-[11px] leading-5 text-zinc-600">
-          <p>Everything stays on this machine. Stash makes no network requests.</p>
+          <p>Everything stays on this machine. Cliptack makes no network requests.</p>
         </div>
       </div>
     </div>
@@ -122,8 +122,8 @@ export function Settings() {
  * of in the panel-wide error banner, and the previous binding stays registered.
  */
 function ShortcutsSection({ pasteSupported }: { pasteSupported: boolean }) {
-  const settings = useStash((s) => s.settings);
-  const updateSettings = useStash((s) => s.updateSettings);
+  const settings = useCliptack((s) => s.settings);
+  const updateSettings = useCliptack((s) => s.updateSettings);
 
   if (!settings) return null;
 
@@ -133,10 +133,10 @@ function ShortcutsSection({ pasteSupported }: { pasteSupported: boolean }) {
     <div className="pb-2">
       <h2 className="text-[13px] text-zinc-200">Shortcuts</h2>
 
-      <p className="mt-2 text-[12px] text-zinc-400">Open Stash</p>
+      <p className="mt-2 text-[12px] text-zinc-400">Open Cliptack</p>
       <div className="mt-1">
         <ShortcutRecorder
-          label="Open Stash"
+          label="Open Cliptack"
           value={settings.toggleShortcut}
           onChange={(value) => updateSettings({ toggleShortcut: value }, { quiet: true })}
         />
@@ -163,8 +163,8 @@ function ShortcutsSection({ pasteSupported }: { pasteSupported: boolean }) {
         the tray menu. Off until you pick a key, so it never takes one from another app.
       </p>
 
-      <p className="mt-4 text-[12px] text-zinc-400">What Stash saves</p>
-      <div className="mt-1.5 space-y-1.5" role="radiogroup" aria-label="What Stash saves">
+      <p className="mt-4 text-[12px] text-zinc-400">What Cliptack saves</p>
+      <div className="mt-1.5 space-y-1.5" role="radiogroup" aria-label="What Cliptack saves">
         <CaptureOption
           checked={!shortcutMode}
           title="Everything I copy"
@@ -176,7 +176,7 @@ function ShortcutsSection({ pasteSupported }: { pasteSupported: boolean }) {
           title="Only what I choose"
           description={
             pasteSupported
-              ? "Ordinary copies are not saved. Select something and press the shortcut below: Stash copies it and keeps it."
+              ? "Ordinary copies are not saved. Select something and press the shortcut below: Cliptack copies it and keeps it."
               : "Ordinary copies are not saved. Press the shortcut below, then copy what you want kept within a couple of seconds."
           }
           onSelect={() => void updateSettings({ captureMode: "shortcut" }, { quiet: true })}
@@ -245,8 +245,8 @@ const THEME_CHOICES: { id: ThemeMode; label: string }[] = [
  * is no save step to forget.
  */
 function AppearanceSection() {
-  const settings = useStash((s) => s.settings);
-  const updateSettings = useStash((s) => s.updateSettings);
+  const settings = useCliptack((s) => s.settings);
+  const updateSettings = useCliptack((s) => s.updateSettings);
   const [draft, setDraft] = useState(settings?.accent ?? "");
 
   // Keep the field in step when a swatch (or a rejected save) changes the value.
@@ -347,7 +347,7 @@ function AppearanceSection() {
  * window still applies underneath — nothing is unlinked from disk immediately.
  */
 function HistorySection() {
-  const clearClipHistory = useStash((s) => s.clearClipHistory);
+  const clearClipHistory = useCliptack((s) => s.clearClipHistory);
   const [confirming, setConfirming] = useState(false);
   const [cleared, setCleared] = useState<number | null>(null);
 
@@ -355,7 +355,7 @@ function HistorySection() {
     <div className="mt-5 border-t border-edge pt-3">
       <h2 className="text-[13px] text-zinc-200">History</h2>
       <p className="mt-1 text-[11px] leading-4 text-zinc-600">
-        Stash keeps the newest 1000 unpinned clips. Pinned items, notes and
+        Cliptack keeps the newest 1000 unpinned clips. Pinned items, notes and
         credentials are never pruned — and clearing below leaves them too.
       </p>
 
@@ -408,9 +408,9 @@ function HistorySection() {
  * when you realise you want it.
  */
 function FolderList() {
-  const folders = useStash((s) => s.folders);
-  const renameFolder = useStash((s) => s.renameFolder);
-  const deleteFolder = useStash((s) => s.deleteFolder);
+  const folders = useCliptack((s) => s.folders);
+  const renameFolder = useCliptack((s) => s.renameFolder);
+  const deleteFolder = useCliptack((s) => s.deleteFolder);
 
   if (folders.length === 0) {
     return (
@@ -531,7 +531,7 @@ function FolderRow({
 
 /**
  * Says what encryption does and, just as importantly, what it does not. DPAPI
- * ties the ciphertext to the Windows account, which makes a stolen stash.db
+ * ties the ciphertext to the Windows account, which makes a stolen cliptack.db
  * useless — but it does not stop a program running as you from asking Windows
  * to decrypt it. The old warning was blunter and, until now, correct; watering
  * it down to "encrypted ✓" would trade one inaccuracy for another.
@@ -544,8 +544,8 @@ function CredentialSecurityNote({ encrypted }: { encrypted: boolean | null }) {
       <div className="mt-5 rounded-md border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2.5">
         <p className="text-[12px] text-amber-300">Credentials are not encrypted</p>
         <p className="mt-1 text-[11px] leading-[1.5] text-amber-400/80">
-          This platform has no key store Stash can use, so passwords are stored as plain text in
-          stash.db. Anyone who can read that file can read them.
+          This platform has no key store Cliptack can use, so passwords are stored as plain text in
+          cliptack.db. Anyone who can read that file can read them.
         </p>
       </div>
     );
@@ -555,9 +555,9 @@ function CredentialSecurityNote({ encrypted }: { encrypted: boolean | null }) {
     <div className="mt-5 rounded-md border border-edge bg-panelalt px-3 py-2.5">
       <p className="text-[12px] text-zinc-300">Credentials are encrypted</p>
       <p className="mt-1 text-[11px] leading-[1.5] text-zinc-500">
-        Passwords are sealed with Windows DPAPI under your account, so stash.db is unreadable on
+        Passwords are sealed with Windows DPAPI under your account, so cliptack.db is unreadable on
         another machine or from another Windows account. It is not protection against a program
-        running as you — that program can ask Windows to decrypt them, exactly as Stash does.
+        running as you — that program can ask Windows to decrypt them, exactly as Cliptack does.
       </p>
       <p className="mt-1.5 text-[11px] leading-[1.5] text-zinc-500">
         A copied password is cleared from the clipboard after 30 seconds. Keep a backup elsewhere:

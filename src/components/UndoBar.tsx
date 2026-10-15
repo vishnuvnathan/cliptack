@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useStash } from "../store/useStash";
+import { useCliptack } from "../store/useCliptack";
 
 /**
  * The reason deleting needs no confirmation dialog.
@@ -12,9 +12,9 @@ import { useStash } from "../store/useStash";
 const DISMISS_MS = 8000;
 
 export function UndoBar() {
-  const lastDeleted = useStash((s) => s.lastDeleted);
-  const undoDelete = useStash((s) => s.undoDelete);
-  const dismissUndo = useStash((s) => s.dismissUndo);
+  const lastDeleted = useCliptack((s) => s.lastDeleted);
+  const undoDelete = useCliptack((s) => s.undoDelete);
+  const dismissUndo = useCliptack((s) => s.dismissUndo);
 
   // Keyed on the id so deleting a second item restarts the countdown rather
   // than inheriting the remains of the first one's.

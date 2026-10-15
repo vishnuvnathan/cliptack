@@ -24,16 +24,16 @@ import {
   startResize,
 } from "./lib/ipc";
 import { isCredential } from "./lib/types";
-import { useStash } from "./store/useStash";
+import { useCliptack } from "./store/useCliptack";
 
 export default function App() {
-  const view = useStash((s) => s.view);
-  const error = useStash((s) => s.error);
-  const notice = useStash((s) => s.notice);
+  const view = useCliptack((s) => s.view);
+  const error = useCliptack((s) => s.error);
+  const notice = useCliptack((s) => s.notice);
 
   useBackendEvents();
-  const theme = useStash((s) => s.settings?.theme);
-  const accent = useStash((s) => s.settings?.accent);
+  const theme = useCliptack((s) => s.settings?.theme);
+  const accent = useCliptack((s) => s.settings?.accent);
   useTheme(theme, accent);
   usePanelHotkeys();
 
@@ -101,7 +101,7 @@ export default function App() {
 }
 
 function Footer() {
-  const setView = useStash((s) => s.setView);
+  const setView = useCliptack((s) => s.setView);
 
   return (
     <div className="flex shrink-0 items-center gap-3 overflow-hidden border-t border-edge px-4 py-2 text-[11px] text-zinc-600">
@@ -146,11 +146,11 @@ function Footer() {
  * re-renders, which is what keeps idle cost at zero.
  */
 function useBackendEvents() {
-  const refresh = useStash((s) => s.refresh);
-  const bootstrap = useStash((s) => s.bootstrap);
-  const setView = useStash((s) => s.setView);
-  const clearRevealed = useStash((s) => s.clearRevealed);
-  const dismissUndo = useStash((s) => s.dismissUndo);
+  const refresh = useCliptack((s) => s.refresh);
+  const bootstrap = useCliptack((s) => s.bootstrap);
+  const setView = useCliptack((s) => s.setView);
+  const clearRevealed = useCliptack((s) => s.clearRevealed);
+  const dismissUndo = useCliptack((s) => s.dismissUndo);
 
   useEffect(() => {
     void bootstrap();
@@ -181,26 +181,26 @@ function useBackendEvents() {
 }
 
 function usePanelHotkeys() {
-  const view = useStash((s) => s.view);
-  const move = useStash((s) => s.move);
-  const copySelected = useStash((s) => s.copySelected);
-  const pasteSelected = useStash((s) => s.pasteSelected);
-  const copySelectedPassword = useStash((s) => s.copySelectedPassword);
-  const pastePassword = useStash((s) => s.pastePassword);
-  const revealSelectedPassword = useStash((s) => s.revealSelectedPassword);
-  const deleteSelected = useStash((s) => s.deleteSelected);
-  const undoDelete = useStash((s) => s.undoDelete);
-  const pinSelected = useStash((s) => s.pinSelected);
-  const openNote = useStash((s) => s.openNote);
-  const openCredential = useStash((s) => s.openCredential);
-  const setView = useStash((s) => s.setView);
-  const setFolder = useStash((s) => s.setFolder);
-  const openTransforms = useStash((s) => s.openTransforms);
-  const transformsOpen = useStash((s) => s.transforms !== null);
-  const openFolderMenu = useStash((s) => s.openFolderMenu);
-  const folderMenuOpen = useStash((s) => s.folderMenuOpen);
-  const popOutSelected = useStash((s) => s.popOutSelected);
-  const newStickyNote = useStash((s) => s.newStickyNote);
+  const view = useCliptack((s) => s.view);
+  const move = useCliptack((s) => s.move);
+  const copySelected = useCliptack((s) => s.copySelected);
+  const pasteSelected = useCliptack((s) => s.pasteSelected);
+  const copySelectedPassword = useCliptack((s) => s.copySelectedPassword);
+  const pastePassword = useCliptack((s) => s.pastePassword);
+  const revealSelectedPassword = useCliptack((s) => s.revealSelectedPassword);
+  const deleteSelected = useCliptack((s) => s.deleteSelected);
+  const undoDelete = useCliptack((s) => s.undoDelete);
+  const pinSelected = useCliptack((s) => s.pinSelected);
+  const openNote = useCliptack((s) => s.openNote);
+  const openCredential = useCliptack((s) => s.openCredential);
+  const setView = useCliptack((s) => s.setView);
+  const setFolder = useCliptack((s) => s.setFolder);
+  const openTransforms = useCliptack((s) => s.openTransforms);
+  const transformsOpen = useCliptack((s) => s.transforms !== null);
+  const openFolderMenu = useCliptack((s) => s.openFolderMenu);
+  const folderMenuOpen = useCliptack((s) => s.folderMenuOpen);
+  const popOutSelected = useCliptack((s) => s.popOutSelected);
+  const newStickyNote = useCliptack((s) => s.newStickyNote);
 
   const onEscape = useCallback(() => {
     void hidePanel();
@@ -209,7 +209,7 @@ function usePanelHotkeys() {
   // Reads the current selection at call time rather than subscribing to items,
   // so the handler identity does not change on every search.
   const onEditSelected = useCallback(() => {
-    const { items, selected } = useStash.getState();
+    const { items, selected } = useCliptack.getState();
     const item = items[selected];
     if (!item) return;
     if (isCredential(item)) openCredential(item.id);
@@ -220,7 +220,7 @@ function usePanelHotkeys() {
   // handler must not change identity every time something is deleted, and the
   // answer it returns decides whether the keystroke is consumed at all.
   const onUndo = useCallback(() => {
-    if (useStash.getState().lastDeleted === null) return false;
+    if (useCliptack.getState().lastDeleted === null) return false;
     void undoDelete();
     return true;
   }, [undoDelete]);
@@ -231,7 +231,7 @@ function usePanelHotkeys() {
         setFolder(null);
         return;
       }
-      const folder = useStash.getState().folders[digit - 1];
+      const folder = useCliptack.getState().folders[digit - 1];
       if (folder) setFolder(folder.id);
     },
     [setFolder],

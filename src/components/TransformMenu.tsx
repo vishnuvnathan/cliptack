@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useStash } from "../store/useStash";
+import { useCliptack } from "../store/useCliptack";
 
 /**
  * The "paste as" menu, opened with Ctrl+T.
@@ -12,9 +12,9 @@ import { useStash } from "../store/useStash";
  * bindings would otherwise move the selection underneath it.
  */
 export function TransformMenu() {
-  const transforms = useStash((s) => s.transforms);
-  const closeTransforms = useStash((s) => s.closeTransforms);
-  const applyTransform = useStash((s) => s.applyTransform);
+  const transforms = useCliptack((s) => s.transforms);
+  const closeTransforms = useCliptack((s) => s.closeTransforms);
+  const applyTransform = useCliptack((s) => s.applyTransform);
 
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);

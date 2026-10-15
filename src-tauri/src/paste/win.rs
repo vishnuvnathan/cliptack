@@ -269,11 +269,11 @@ mod tests {
 
     /// Manual probe, not part of the suite: focus a field in another window,
     /// then run `cargo test uia_probe -- --ignored --nocapture` within the
-    /// `STASH_PROBE_DELAY_MS` window. Prints what the password guard would see.
+    /// `CLIPTACK_PROBE_DELAY_MS` window. Prints what the password guard would see.
     #[test]
     #[ignore]
     fn uia_probe() {
-        let delay = std::env::var("STASH_PROBE_DELAY_MS")
+        let delay = std::env::var("CLIPTACK_PROBE_DELAY_MS")
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(0);

@@ -92,8 +92,8 @@ function fromEvent(e: KeyboardEvent): { value?: string; hint?: string } {
  * (another app owns it, say); it is shown under the field and the previous
  * binding stays in force, so a failed attempt costs nothing.
  *
- * Stash's own current global shortcuts cannot be recorded: the OS delivers
- * them to Stash's handler rather than to this field.
+ * Cliptack's own current global shortcuts cannot be recorded: the OS delivers
+ * them to Cliptack's handler rather than to this field.
  */
 export function ShortcutRecorder({
   value,

@@ -406,7 +406,7 @@ pub async fn clear_clip_history(pool: &SqlitePool) -> Result<u64> {
     Ok(res.rows_affected())
 }
 
-/// Records that an item was actually used -- copied or pasted *out* of Stash.
+/// Records that an item was actually used -- copied or pasted *out* of Cliptack.
 ///
 /// Deliberately does not touch `updated_at`. That column drives the recent-first
 /// list, and bumping it here would shuffle the list under the user every time
@@ -606,7 +606,7 @@ pub async fn delete_secret(pool: &SqlitePool, item_id: &str) -> Result<()> {
 /// Re-seals every secret still stored as plaintext, in place.
 ///
 /// Without this, a credential saved before encryption landed stays readable in
-/// `stash.db` until the user happens to edit it again -- which may be never.
+/// `cliptack.db` until the user happens to edit it again -- which may be never.
 /// Encryption that only applies to future writes is not encryption.
 ///
 /// Idempotent: the second run matches no rows and returns 0. A row that fails
