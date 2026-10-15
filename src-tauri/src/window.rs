@@ -126,8 +126,15 @@ pub fn show(win: &WebviewWindow) {
 ///
 /// Also when the next sticky window gets built ahead of time: building one
 /// stalls the main thread, and with the panel down nobody is waiting on it.
+///
+/// Only a panel that is actually up has a geometry worth keeping. Windows sends
+/// the never-shown panel a `Focused(false)` at launch, which lands here too; it
+/// still has its default size then, and saving that overwrote the user's size
+/// on every start.
 pub fn hide(win: &WebviewWindow) {
-    persist_geometry(win);
+    if win.is_visible().unwrap_or(false) {
+        persist_geometry(win);
+    }
     let _ = win.hide();
     crate::sticky::ensure_spare(win.app_handle());
 }
