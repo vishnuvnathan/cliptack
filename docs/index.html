@@ -451,12 +451,12 @@
           <div style="left:62%;top:20px;width:28%;height:112px;background:#cae1fc"><span style="display:block;height:52px;border-radius:6px;background:#7aa2f7"></span></div>
         </div></div>
         <h3>Tack it to your screen</h3>
-        <p><kbd>Ctrl</kbd>+<kbd>O</kbd> pops a clip — a snippet, an image, a colour — into a small card that stays on top. Notes stay editable in the card, and cards come back after a restart.</p>
+        <p><kbd>Ctrl</kbd>+<kbd>O</kbd> pops a clip — a snippet, an image, a colour — into a small card that stays on top, instantly. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> starts a blank one, and the tray hides them all at once. Notes stay editable in the card, and cards come back after a restart.</p>
       </div>
       <div class="card w2 rv">
         <div class="vis"><div class="fold"><span class="on">All</span><span>Work <kbd>Alt+1</kbd></span><span>Snippets <kbd>Alt+2</kbd></span><span>Notes</span><span>Creds</span><span>Pinned</span></div></div>
         <h3>Notes, folders, pins</h3>
-        <p>Write notes in Markdown, file anything into folders, and pin what you keep reaching for.</p>
+        <p>Write formatted notes — lists, checklists, code, links — file anything into folders, and pin what you keep reaching for.</p>
       </div>
       <div class="card w2 rv">
         <div class="vis"><div class="shield"><div class="rowx"><div><span>meeting notes.txt</span><span>saved</span></div><div class="skip"><span>from a password manager</span><span>skipped</span></div><div><span>#7aa2f7</span><span>saved</span></div></div></div></div>
@@ -541,7 +541,7 @@
       <div class="kicker">Not taken on trust</div>
       <h2 class="serif" style="font-size:clamp(34px,4.3vw,58px);line-height:1.06;letter-spacing:-.033em;margin:16px 0 40px">Checked by <em>running</em> it.</h2>
       <div class="figs">
-        <div><b>117</b><span>automated tests: classifier, query parser, transforms, crypto, migrations</span></div>
+        <div><b>121</b><span>automated tests: classifier, query parser, transforms, crypto, migrations</span></div>
         <div><b>~30</b><span>behaviours verified by driving the real app on Windows 11</span></div>
       </div>
     </div>
@@ -588,7 +588,7 @@
 const CLIPS = [
   { title: "GitHub — demo account", type: "cred", app: "chrome.exe", age: "1d", pinned: true, body: "username   demo\npassword   ••••••••••••\n\nCredentials can't be tacked to the screen,\nand paste only into password fields." },
   { title: "Release notes before the 3pm sync", type: "text", app: "slack.exe", age: "2h", pinned: true, body: "Pick up the release notes from Sam before the 3pm sync." },
-  { title: "Launch checklist", type: "note", app: "", age: "1d", body: "# Launch checklist\n☑ Rename to Cliptack\n☑ 117 tests green\n☐ Publish the release" },
+  { title: "Launch checklist", type: "note", app: "", age: "1d", body: "# Launch checklist\n☑ Rename to Cliptack\n☑ 121 tests green\n☐ Publish the release" },
   { title: "https://github.com/vishnuvnathan/cliptack", type: "link", app: "chrome.exe", age: "1d", body: "https://github.com/vishnuvnathan/cliptack" },
   { title: "pub fn classify(raw: &str) -> ContentType", type: "code", app: "Code.exe", age: "1d",
     html: '<span class="k">pub fn</span> <span class="f">classify</span>(raw: &amp;<span class="k">str</span>) -&gt; ContentType {\n    <span class="k">let</span> t = raw.<span class="f">trim</span>();\n    <span class="k">if</span> <span class="f">looks_like_url</span>(t) { <span class="k">return</span> ContentType::Link; }\n    ContentType::Text\n}' },

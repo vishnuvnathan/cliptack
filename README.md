@@ -33,7 +33,7 @@ protected your PC": choose **More info → Run anyway**.
 - **Password-manager copies are never recorded.**
 
 None of this is taken on trust: [about 30 behaviours were checked by running the
-app](#what-was-verified-on-windows-11), on top of 117 automated tests.
+app](#what-was-verified-on-windows-11), on top of 121 automated tests.
 
 Windows only for now. The macOS and Linux code is written but has never been
 compiled on those platforms.
