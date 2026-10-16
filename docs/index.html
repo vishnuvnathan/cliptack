@@ -6,6 +6,7 @@
 <title>Cliptack — a clipboard history that stays on your machine</title>
 <meta name="description" content="Cliptack is a free, open-source clipboard history for Windows. Everything stays on your machine. Search like a developer, paste as anything, and tack any clip to your screen." />
 <meta name="theme-color" content="#0b0b0e" />
+<script>try { const t = localStorage.getItem("cliptack-theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}</script>
 <meta property="og:type" content="website" />
 <meta property="og:title" content="Cliptack — a clipboard history that stays on your machine" />
 <meta property="og:description" content="Free and open source for Windows 10 and 11. Search your history, paste as anything, and tack any clip to your screen." />
@@ -17,16 +18,44 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>
+  /* Every colour is light-dark(light, dark). The page follows the system theme
+     until the nav toggle sets <html data-theme>. The demo panel's colours are
+     the app's own (src/styles.css), so in light mode it looks like the app's
+     light theme, darkened accent included (theme.ts accentFor). */
   :root {
-    --ink: #0b0b0e;
-    --ink2: #101014;
-    --panel: #16161a;
-    --panelalt: #1d1d22;
-    --edge: #2a2a31;
-    --accent: #7aa2f7;
-    --accent-dim: rgba(122,162,247,.14);
-    --z100: #f4f4f5; --z200: #e4e4e7; --z300: #d4d4d8; --z400: #a1a1aa;
-    --z500: #71717a; --z600: #52525b; --z700: #3f3f46; --z800: #27272a;
+    color-scheme: light dark;
+    --ink: light-dark(#f6f6f8, #0b0b0e);
+    --panel: light-dark(#fcfcfd, #16161a);
+    --panelalt: light-dark(#f2f2f5, #1d1d22);
+    --edge: light-dark(#dadae0, #2a2a31);
+    --edge-strong: light-dark(#c4c4cc, #3a3a44);
+    --line: light-dark(#e6e6ea, #1d1d23);
+    --accent: light-dark(#536ea8, #7aa2f7);
+    --on-accent: light-dark(#ffffff, #101014);
+    --accent-dim: light-dark(rgba(83,110,168,.12), rgba(122,162,247,.14));
+    --z100: light-dark(#18181b, #f4f4f5); --z200: light-dark(#27272a, #e4e4e7);
+    --z300: light-dark(#3f3f46, #d4d4d8); --z400: light-dark(#52525b, #a1a1aa);
+    --z500: light-dark(#63636c, #71717a); --z600: light-dark(#7c7c86, #52525b);
+    --z700: light-dark(#a1a1aa, #3f3f46); --z800: light-dark(#e4e4e7, #27272a);
+    --hover: light-dark(rgba(0,0,0,.035), rgba(255,255,255,.025));
+    --nav-bg: light-dark(rgba(246,246,248,.78), rgba(11,11,14,.72));
+    --nav-edge: light-dark(rgba(218,218,224,.8), rgba(42,42,49,.6));
+    --ghost-bg: light-dark(rgba(255,255,255,.7), rgba(29,29,34,.6));
+    --card-top: light-dark(#ffffff, #16161b); --card-bot: light-dark(#f9f9fb, #111115);
+    --vis-bg: light-dark(#f2f2f5, #0d0d11); --vis-edge: light-dark(#e4e4e9, #1f1f26);
+    --kbd-top: light-dark(#ffffff, #2c2c33); --kbd-bot: light-dark(#f0f0f3, #222228);
+    --kbd-edge: light-dark(#d4d4da, #3a3a43); --kbd-drop: light-dark(#c8c8d0, #121216);
+    --kbd-hi: light-dark(rgba(255,255,255,.9), rgba(255,255,255,.07));
+    --shadow: light-dark(rgba(30,30,50,.14), rgba(0,0,0,.6));
+    --shadow-sm: light-dark(rgba(30,30,50,.16), rgba(0,0,0,.5));
+    --dot: light-dark(rgba(0,0,0,.09), rgba(255,255,255,.07));
+    --glow: light-dark(rgba(83,110,168,.14), rgba(122,162,247,.17));
+    --install-top: light-dark(#ffffff, #15151a); --install-bot: light-dark(#f2f2f6, #0f0f13);
+    --stripe-a: light-dark(#ececf0, #141418); --stripe-b: light-dark(#f4f4f7, #121215);
+    --void: light-dark(#d4d4da, #000000);
+    --ok: light-dark(#15803d, #4ade80); --bad: light-dark(#dc2626, #f87171);
+    --syn-k: light-dark(#8b3fb8, #c792ea); --syn-s: light-dark(#467a1c, #c3e88d); --syn-f: light-dark(#3559b0, #82aaff);
+    --sel-ink: light-dark(#18181b, #ffffff);
     /* The app renders in Windows' own fonts (Segoe UI, Consolas), so the site
        does too. Elsewhere it falls back to the system UI font and JetBrains Mono. */
     --display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
@@ -34,8 +63,9 @@
     --mono: Consolas, "JetBrains Mono", ui-monospace, monospace;
     --gutter: clamp(16px, 4vw, 56px);
     --max: 1240px;
-    color-scheme: dark;
   }
+  :root[data-theme="light"] { color-scheme: light; }
+  :root[data-theme="dark"] { color-scheme: dark; }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
   body {
@@ -43,7 +73,7 @@
     font-size: 17px; line-height: 1.6; -webkit-font-smoothing: antialiased; overflow-x: hidden;
   }
   a { color: inherit; }
-  ::selection { background: rgba(122,162,247,.35); color: #fff; }
+  ::selection { background: rgba(122,162,247,.35); color: var(--sel-ink); }
   .grain {
     position: fixed; inset: 0; pointer-events: none; z-index: 100; opacity: .06; mix-blend-mode: overlay;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
@@ -57,14 +87,14 @@
   code { font-size: .88em; color: var(--z200); background: var(--z800); border-radius: 5px; padding: 1px 6px; }
   kbd {
     display: inline-block; font-size: 13px; line-height: 1; color: var(--z100); padding: 6px 9px; min-width: 28px; text-align: center;
-    background: linear-gradient(#2c2c33, #222228); border: 1px solid #3a3a43; border-radius: 7px;
-    box-shadow: 0 3px 0 #121216, inset 0 1px 0 rgba(255,255,255,.07);
+    background: linear-gradient(var(--kbd-top), var(--kbd-bot)); border: 1px solid var(--kbd-edge); border-radius: 7px;
+    box-shadow: 0 3px 0 var(--kbd-drop), inset 0 1px 0 var(--kbd-hi);
   }
 
   /* ---------- nav ---------- */
   nav {
     position: sticky; top: 0; z-index: 50; backdrop-filter: blur(14px) saturate(140%); -webkit-backdrop-filter: blur(14px) saturate(140%);
-    background: rgba(11,11,14,.72); border-bottom: 1px solid rgba(42,42,49,.6);
+    background: var(--nav-bg); border-bottom: 1px solid var(--nav-edge);
   }
   nav .wrap { display: flex; align-items: center; gap: 28px; height: 64px; }
   .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-family: var(--display); font-weight: 600; font-size: 20px; letter-spacing: -.02em; color: var(--z100); }
@@ -76,23 +106,29 @@
     display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 500; font-size: 15px;
     border-radius: 11px; padding: 11px 18px; transition: transform .2s, box-shadow .2s, background .2s; white-space: nowrap;
   }
-  .btn.primary { background: var(--accent); color: #101014; box-shadow: 0 10px 30px rgba(122,162,247,.25), inset 0 1px 0 rgba(255,255,255,.4); }
+  .btn.primary { background: var(--accent); color: var(--on-accent); box-shadow: 0 10px 30px rgba(122,162,247,.25), inset 0 1px 0 rgba(255,255,255,.4); }
   .btn.primary:hover { transform: translateY(-2px); box-shadow: 0 16px 40px rgba(122,162,247,.35), inset 0 1px 0 rgba(255,255,255,.4); }
-  .btn.ghost { color: var(--z200); border: 1px solid var(--edge); background: rgba(29,29,34,.6); }
+  .btn.ghost { color: var(--z200); border: 1px solid var(--edge); background: var(--ghost-bg); }
   .btn.ghost:hover { border-color: var(--z600); background: var(--panelalt); }
   nav .btn { padding: 8px 14px; font-size: 14px; }
+  .navr { display: flex; align-items: center; gap: 10px; }
+  .themebtn {
+    width: 36px; height: 36px; flex: none; display: grid; place-items: center; cursor: pointer; padding: 0;
+    color: var(--z400); background: var(--ghost-bg); border: 1px solid var(--edge); border-radius: 10px; transition: color .2s, border-color .2s;
+  }
+  .themebtn:hover { color: var(--z100); border-color: var(--edge-strong); }
 
   /* ---------- hero ---------- */
   .hero { position: relative; padding: clamp(28px, 4vw, 56px) 0 clamp(44px, 5vw, 76px); }
   .hero::before {
     content: ""; position: absolute; inset: -120px 0 0; z-index: -1; pointer-events: none;
     background:
-      radial-gradient(700px 480px at 78% 35%, rgba(122,162,247,.17), transparent 70%),
+      radial-gradient(700px 480px at 78% 35%, var(--glow), transparent 70%),
       radial-gradient(600px 400px at 5% 85%, rgba(253,240,166,.05), transparent 70%);
   }
   .hero::after {
     content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: .55;
-    background-image: radial-gradient(rgba(255,255,255,.07) 1px, transparent 1px); background-size: 30px 30px;
+    background-image: radial-gradient(var(--dot) 1px, transparent 1px); background-size: 30px 30px;
     mask-image: radial-gradient(ellipse at 70% 40%, #000 20%, transparent 70%);
   }
   .hero .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: clamp(32px, 4.5vw, 64px); align-items: center; }
@@ -105,10 +141,10 @@
   /* the working panel mock */
   .stagebox { position: relative; }
   .try { position: absolute; top: -34px; left: 6px; font-family: var(--mono); font-size: 12.5px; color: var(--z500); display: flex; align-items: center; gap: 8px; }
-  .try::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 10px #4ade80; }
+  .try::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 10px var(--ok); }
   .panel {
     position: relative; background: var(--panel); border: 1px solid var(--edge); border-radius: 16px; overflow: hidden;
-    box-shadow: 0 50px 120px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.02); height: 520px; display: flex; flex-direction: column;
+    box-shadow: 0 50px 120px var(--shadow), 0 0 0 1px rgba(255,255,255,.02); height: 520px; display: flex; flex-direction: column;
   }
   .panel .grip { height: 18px; display: grid; place-items: center; flex: none; }
   .panel .grip i { width: 40px; height: 4px; border-radius: 4px; background: var(--z700); }
@@ -127,13 +163,13 @@
   .pbody { flex: 1; display: flex; min-height: 0; }
   .plist { width: 42%; min-width: 0; border-right: 1px solid var(--edge); overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--z700) transparent; }
   .prow { display: flex; align-items: center; gap: 11px; height: 58px; padding: 0 12px 0 14px; cursor: pointer; border-left: 3px solid transparent; position: relative; }
-  .prow:hover { background: rgba(255,255,255,.025); }
+  .prow:hover { background: var(--hover); }
   .prow.sel { background: rgba(122,162,247,.1); border-left-color: var(--accent); }
   .pic { flex: none; width: 34px; height: 34px; border: 1px solid var(--z700); border-radius: 7px; display: grid; place-items: center; font-size: 9.5px; color: var(--z500); letter-spacing: .02em; text-transform: uppercase; }
   .pic.cred { color: var(--accent); border-color: rgba(122,162,247,.5); }
   .pt { min-width: 0; flex: 1; }
   .pt b { display: block; font-weight: 400; font-size: 14.5px; color: var(--z100); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .pt small { font-size: 12px; color: var(--z500); }
+  .pt small { display: block; font-size: 12px; line-height: 1.5; color: var(--z500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tackbtn {
     flex: none; width: 28px; height: 28px; border-radius: 7px; border: 1px solid transparent; background: none; color: var(--z500); cursor: pointer;
     display: grid; place-items: center; opacity: 0; transition: opacity .15s;
@@ -145,19 +181,19 @@
   .pph { flex: none; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--edge); font-size: 14px; color: var(--z100); white-space: nowrap; overflow: hidden; }
   .tag { font-size: 10.5px; letter-spacing: .06em; color: var(--z500); background: var(--z800); border-radius: 5px; padding: 2px 7px; text-transform: uppercase; }
   .ppb { flex: 1; padding: 16px; font-family: var(--mono); font-size: 13.5px; line-height: 1.7; color: var(--z200); white-space: pre-wrap; word-break: break-word; overflow: auto; }
-  .ppb .k { color: #c792ea; } .ppb .s { color: #c3e88d; } .ppb .f { color: #82aaff; } .ppb .c { color: var(--z500); }
+  .ppb .k { color: var(--syn-k); } .ppb .s { color: var(--syn-s); } .ppb .f { color: var(--syn-f); } .ppb .c { color: var(--z500); }
   .pfoot { flex: none; height: 36px; border-top: 1px solid var(--edge); display: flex; gap: 16px; align-items: center; padding: 0 14px; font-size: 12px; color: var(--z500); white-space: nowrap; overflow: hidden; }
   .pfoot .r { margin-left: auto; }
   .ptoast {
     position: absolute; left: 50%; bottom: 50px; transform: translate(-50%, 12px); opacity: 0; pointer-events: none; white-space: nowrap;
-    background: var(--accent); color: #101014; font-weight: 500; font-size: 13.5px; padding: 8px 14px; border-radius: 9px; transition: opacity .25s, transform .3s cubic-bezier(.34,1.56,.64,1);
+    background: var(--accent); color: var(--on-accent); font-weight: 500; font-size: 13.5px; padding: 8px 14px; border-radius: 9px; transition: opacity .25s, transform .3s cubic-bezier(.34,1.56,.64,1);
   }
   .ptoast.show { opacity: 1; transform: translate(-50%, 0); }
 
   /* stickies -- real ones float over the page, like the app's */
   .sticky {
     position: fixed; z-index: 60; width: 250px; border-radius: 11px; overflow: hidden; color: #18181b; touch-action: none;
-    box-shadow: 0 24px 50px rgba(0,0,0,.5), 0 3px 10px rgba(0,0,0,.3); animation: drop .55s cubic-bezier(.34,1.56,.64,1) both;
+    box-shadow: 0 24px 50px var(--shadow-sm), 0 3px 10px rgba(0,0,0,.18); animation: drop .55s cubic-bezier(.34,1.56,.64,1) both;
   }
   .sticky.inhero { position: absolute; z-index: 3; }
   .sticky .st { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 12px; font-size: 12.5px; color: #46464e; cursor: grab; user-select: none; }
@@ -178,7 +214,7 @@
   .rule { border: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--edge) 20%, var(--edge) 80%, transparent); margin: 0; }
 
   /* film */
-  .film { position: relative; border-radius: 20px; overflow: hidden; border: 1px solid var(--edge); background: #000; box-shadow: 0 60px 140px rgba(0,0,0,.6); aspect-ratio: 16 / 9; }
+  .film { position: relative; border-radius: 20px; overflow: hidden; border: 1px solid var(--edge); background: #000; box-shadow: 0 60px 140px var(--shadow); aspect-ratio: 16 / 9; }
   .film video { display: block; width: 100%; height: 100%; }
   .film-cap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 16px; font-size: 14px; color: var(--z500); }
 
@@ -186,14 +222,14 @@
   .bento { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; }
   .card {
     position: relative; grid-column: span 2; border-radius: 20px; padding: 28px; overflow: hidden;
-    background: linear-gradient(180deg, #16161b, #111115); border: 1px solid var(--edge);
+    background: linear-gradient(180deg, var(--card-top), var(--card-bot)); border: 1px solid var(--edge);
     transition: border-color .3s, transform .3s;
   }
-  .card:hover { border-color: #3a3a44; }
+  .card:hover { border-color: var(--edge-strong); }
   .card.w3 { grid-column: span 3; } .card.w4 { grid-column: span 4; }
   .card h3 { font-family: var(--display); font-weight: 600; color: var(--z100); font-size: 23px; line-height: 1.2; margin: 0 0 10px; letter-spacing: -.02em; }
   .card p { margin: 0; color: var(--z400); font-size: 15.5px; }
-  .card .vis { height: 170px; margin: -4px 0 24px; border-radius: 12px; background: #0d0d11; border: 1px solid #1f1f26; position: relative; overflow: hidden; }
+  .card .vis { height: 170px; margin: -4px 0 24px; border-radius: 12px; background: var(--vis-bg); border: 1px solid var(--vis-edge); position: relative; overflow: hidden; }
 
   .typer { position: absolute; left: 18px; right: 18px; top: 50%; transform: translateY(-50%); height: 54px; border-radius: 10px; border: 1px solid var(--z700); display: flex; align-items: center; gap: 10px; padding: 0 16px; background: var(--panel); }
   .typer .q { font-family: var(--mono); font-size: 15px; color: var(--z100); white-space: pre; overflow: hidden; }
@@ -204,10 +240,10 @@
   .json { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; padding: 0 18px; font-family: var(--mono); font-size: 12.5px; line-height: 1.6; }
   .json pre { margin: 0; color: var(--z300); white-space: pre-wrap; word-break: break-all; }
   .json .arrow { color: var(--accent); font-size: 20px; }
-  .json .s { color: #c3e88d; } .json .k { color: #c792ea; }
+  .json .s { color: var(--syn-s); } .json .k { color: var(--syn-k); }
 
   .minis { position: absolute; inset: 0; }
-  .minis div { position: absolute; border-radius: 8px; box-shadow: 0 12px 26px rgba(0,0,0,.5); font-size: 12px; padding: 26px 12px 10px; color: #18181b; transition: transform .5s cubic-bezier(.34,1.56,.64,1); }
+  .minis div { position: absolute; border-radius: 8px; box-shadow: 0 12px 26px var(--shadow-sm); font-size: 12px; padding: 26px 12px 10px; color: #18181b; transition: transform .5s cubic-bezier(.34,1.56,.64,1); }
   .minis div::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 18px; background: rgba(0,0,0,.06); }
   .card:hover .minis div:nth-child(1) { transform: rotate(-6deg) translate(-8px, -6px); }
   .card:hover .minis div:nth-child(2) { transform: rotate(5deg) translate(6px, -10px); }
@@ -238,7 +274,7 @@
 
   /* keys */
   .keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 0 40px; }
-  .keys div { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 0; border-bottom: 1px solid #1d1d23; font-size: 15.5px; color: var(--z300); }
+  .keys div { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 0; border-bottom: 1px solid var(--line); font-size: 15.5px; color: var(--z300); }
   .keys div span:last-child { display: flex; gap: 5px; flex: none; }
 
   /* proof */
@@ -247,12 +283,12 @@
   .proof .figs b { display: block; font-family: var(--display); font-weight: 600; font-size: clamp(64px, 8vw, 108px); line-height: .9; color: var(--z100); letter-spacing: -.05em; }
   .proof .figs span { font-family: var(--mono); font-size: 13px; color: var(--z500); display: block; margin-top: 14px; max-width: 16em; }
   .proof ul { margin: 0; padding: 0; list-style: none; }
-  .proof li { padding: 13px 0 13px 30px; border-bottom: 1px solid #1d1d23; position: relative; color: var(--z300); font-size: 15.5px; }
-  .proof li::before { content: "✓"; position: absolute; left: 2px; color: #4ade80; font-family: var(--mono); }
+  .proof li { padding: 13px 0 13px 30px; border-bottom: 1px solid var(--line); position: relative; color: var(--z300); font-size: 15.5px; }
+  .proof li::before { content: "✓"; position: absolute; left: 2px; color: var(--ok); font-family: var(--mono); }
 
   /* install */
   .install { border-radius: 26px; padding: clamp(32px, 6vw, 80px); position: relative; overflow: hidden; border: 1px solid var(--edge);
-    background: radial-gradient(600px 300px at 85% 0%, rgba(122,162,247,.2), transparent 70%), linear-gradient(180deg, #15151a, #0f0f13); }
+    background: radial-gradient(600px 300px at 85% 0%, var(--glow), transparent 70%), linear-gradient(180deg, var(--install-top), var(--install-bot)); }
   .install h2 { font-family: var(--display); font-weight: 600; color: var(--z100); font-size: clamp(36px, 5vw, 70px); line-height: 1.02; margin: 0 0 30px; letter-spacing: -.035em; }
   .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin: 46px 0 0; counter-reset: s; }
   .steps div { counter-increment: s; border-top: 1px solid var(--edge); padding-top: 18px; color: var(--z400); font-size: 15.5px; }
@@ -288,7 +324,7 @@
   }
   @media (max-width: 640px) {
     nav .links { display: none; }
-    nav .btn { margin-left: auto; }
+    .navr { margin-left: auto; }
     .panel { height: 470px; }
     .plist { width: 100%; border-right: 0; }
     .pprev { display: none; }
@@ -299,6 +335,9 @@
     footer .r { margin-left: 0; }
   }
 </style>
+<!-- Visit counts via GoatCounter: no cookies, no personal data. count.js skips
+     localhost and file:// on its own, so local previews are not counted. -->
+<script data-goatcounter="https://cliptack.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 </head>
 <body>
 <div class="grain" aria-hidden="true"></div>
@@ -311,9 +350,12 @@
     </a>
     <div class="links">
       <a href="#film">Film</a><a href="#features">Features</a><a href="#privacy">Privacy</a><a href="#keys">Shortcuts</a>
-      <a href="https://github.com/vishnuvnathan/cliptack">GitHub</a>
+      <a href="https://github.com/vishnuvnathan/cliptack" data-goatcounter-click="github-nav">GitHub</a>
     </div>
-    <a class="btn primary" href="https://github.com/vishnuvnathan/cliptack/releases/latest/download/Cliptack-windows-x64.msi">Download</a>
+    <div class="navr">
+      <button class="themebtn" id="theme" type="button"></button>
+      <a class="btn primary" href="https://github.com/vishnuvnathan/cliptack/releases/latest/download/Cliptack-windows-x64.msi" data-goatcounter-click="download-nav">Download</a>
+    </div>
   </div>
 </nav>
 
@@ -324,11 +366,11 @@
       <h1 class="rv">Everything you copy, <em>tacked</em> where you need it.</h1>
       <p class="lede rv">Cliptack keeps your clipboard history on your machine and nowhere else. Press one shortcut to find anything you've copied, reshape it on the way out, or pin it to your screen.</p>
       <div class="ctas rv">
-        <a class="btn primary" href="https://github.com/vishnuvnathan/cliptack/releases/latest/download/Cliptack-windows-x64.msi">
+        <a class="btn primary" href="https://github.com/vishnuvnathan/cliptack/releases/latest/download/Cliptack-windows-x64.msi" data-goatcounter-click="download-hero">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.5 10.5 4.4v7.1H3zm0 13L10.5 19.6v-7H3zM11.5 4.3 21 3v8.5h-9.5zm0 15.4L21 21v-8.4h-9.5z"/></svg>
           Download for Windows
         </a>
-        <a class="btn ghost" href="https://github.com/vishnuvnathan/cliptack">
+        <a class="btn ghost" href="https://github.com/vishnuvnathan/cliptack" data-goatcounter-click="source-hero">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.56-.29-5.25-1.28-5.25-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.7 5.39-5.27 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5"/></svg>
           View the source
         </a>
@@ -441,22 +483,22 @@
     </div>
     <div class="priv">
       <div class="rv">
-        <div class="privvis"><svg width="100%" height="130" viewBox="0 0 330 130" fill="none" aria-hidden="true"><rect x="10" y="22" width="110" height="72" rx="8" stroke="#a1a1aa" stroke-width="2.5"/><path d="M0 106h130" stroke="#a1a1aa" stroke-width="2.5" stroke-linecap="round"/><path d="M140 62h100" stroke="#52525b" stroke-width="2.5" stroke-dasharray="5 8"/><path d="M262 82a22 22 0 0 1 3-44 30 30 0 0 1 57 10 18 18 0 0 1-5 34z" stroke="#52525b" stroke-width="2.5"/><circle cx="190" cy="62" r="20" fill="#0b0b0e" stroke="#f87171" stroke-width="2.5"/><path d="m182 54 16 16m0-16-16 16" stroke="#f87171" stroke-width="2.5" stroke-linecap="round"/></svg></div>
+        <div class="privvis"><svg width="100%" height="130" viewBox="0 0 330 130" fill="none" aria-hidden="true"><rect x="10" y="22" width="110" height="72" rx="8" style="stroke:var(--z400)" stroke-width="2.5"/><path d="M0 106h130" style="stroke:var(--z400)" stroke-width="2.5" stroke-linecap="round"/><path d="M140 62h100" style="stroke:var(--z600)" stroke-width="2.5" stroke-dasharray="5 8"/><path d="M262 82a22 22 0 0 1 3-44 30 30 0 0 1 57 10 18 18 0 0 1-5 34z" style="stroke:var(--z600)" stroke-width="2.5"/><circle cx="190" cy="62" r="20" style="fill:var(--ink);stroke:var(--bad)" stroke-width="2.5"/><path d="m182 54 16 16m0-16-16 16" style="stroke:var(--bad)" stroke-width="2.5" stroke-linecap="round"/></svg></div>
         <span class="num">01</span>
         <h3>Nothing leaves your machine.</h3>
         <p>The code makes no network calls, and no dependency that opens a socket is included. No account, no sync, no telemetry.</p>
       </div>
       <div class="rv">
         <div class="privvis" style="display:flex;flex-direction:column;gap:10px;justify-content:center">
-          <div style="display:flex;justify-content:space-between;border:1px solid #3f3f46;border-radius:9px;padding:10px 14px;font-size:14px;color:#a1a1aa">Password <span class="mono" style="color:#f4f4f5;letter-spacing:.2em">••••••••</span><span class="mono" style="color:#4ade80;font-size:12.5px">✓ pasted</span></div>
-          <div style="display:flex;justify-content:space-between;border:1px solid #3f3f46;border-radius:9px;padding:10px 14px;font-size:14px;color:#a1a1aa">Message <span></span><span class="mono" style="color:#f87171;font-size:12.5px">✕ refused</span></div>
+          <div style="display:flex;justify-content:space-between;border:1px solid var(--z700);border-radius:9px;padding:10px 14px;font-size:14px;color:var(--z400)">Password <span class="mono" style="color:var(--z100);letter-spacing:.2em">••••••••</span><span class="mono" style="color:var(--ok);font-size:12.5px">✓ pasted</span></div>
+          <div style="display:flex;justify-content:space-between;border:1px solid var(--z700);border-radius:9px;padding:10px 14px;font-size:14px;color:var(--z400)">Message <span></span><span class="mono" style="color:var(--bad);font-size:12.5px">✕ refused</span></div>
         </div>
         <span class="num">02</span>
         <h3>Passwords paste only into password fields.</h3>
         <p>Saved credentials are encrypted with Windows DPAPI. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd> pastes one only after Windows UI Automation confirms the focused box is a password field. Anything else, and nothing is sent.</p>
       </div>
       <div class="rv">
-        <div class="privvis"><div style="position:absolute;inset:0;border:1.5px solid rgba(248,113,113,.5);border-radius:10px;background:repeating-linear-gradient(90deg,#141418 0 40px,#121215 40px 80px)"><span class="mono" style="position:absolute;left:12px;top:8px;font-size:11.5px;color:#f87171">● You are presenting</span><div style="position:absolute;left:30%;right:30%;top:36px;bottom:18px;background:#000;border-radius:6px;display:grid;place-items:center" class="mono"><span style="font-size:11px;color:#52525b">not captured</span></div></div></div>
+        <div class="privvis"><div style="position:absolute;inset:0;border:1.5px solid rgba(248,113,113,.5);border-radius:10px;background:repeating-linear-gradient(90deg,var(--stripe-a) 0 40px,var(--stripe-b) 40px 80px)"><span class="mono" style="position:absolute;left:12px;top:8px;font-size:11.5px;color:var(--bad)">● You are presenting</span><div style="position:absolute;left:30%;right:30%;top:36px;bottom:18px;background:var(--void);border-radius:6px;display:grid;place-items:center" class="mono"><span style="font-size:11px;color:var(--z600)">not captured</span></div></div></div>
         <span class="num">03</span>
         <h3>Hidden from screen shares.</h3>
         <p>On by default, the panel and every sticky are excluded from screen capture, so your history never turns up in a meeting.</p>
@@ -521,7 +563,7 @@
       <div class="kicker">Get it</div>
       <h2 style="margin-top:16px">Free. Open source. <em>Yours.</em></h2>
       <div class="ctas" style="display:flex;flex-wrap:wrap;gap:12px">
-        <a class="btn primary" href="https://github.com/vishnuvnathan/cliptack/releases/latest/download/Cliptack-windows-x64.msi">Download for Windows</a>
+        <a class="btn primary" href="https://github.com/vishnuvnathan/cliptack/releases/latest/download/Cliptack-windows-x64.msi" data-goatcounter-click="download-install">Download for Windows</a>
         <a class="btn ghost" href="https://github.com/vishnuvnathan/cliptack/releases">All releases</a>
         <a class="btn ghost" href="https://github.com/vishnuvnathan/cliptack#building">Build it yourself</a>
       </div>
@@ -536,7 +578,7 @@
 
 <footer>
   <div class="wrap">
-    <span>Cliptack · MIT licence · Windows only for now — the macOS and Linux code is written but has never been compiled there.</span>
+    <span>Cliptack · MIT licence · Windows only for now — the macOS and Linux code is written but has never been compiled there.<br>This website counts visits with <a href="https://www.goatcounter.com" style="text-decoration:underline">GoatCounter</a>: no cookies, nothing that identifies you. The app itself sends nothing.</span>
     <span class="r"><a href="https://github.com/vishnuvnathan/cliptack">GitHub</a><a href="https://github.com/vishnuvnathan/cliptack/issues">Issues</a><a href="https://github.com/vishnuvnathan/cliptack/blob/main/LICENSE">Licence</a></span>
   </div>
 </footer>
@@ -692,6 +734,31 @@ document.querySelectorAll(".sticky.inhero").forEach(wire);
     if (n <= 0) { dir = 1; li = (li + 1) % lines.length; hold = 4; }
     paint(s.slice(0, n));
   }, 70);
+}
+
+/* ---------- theme toggle ---------- */
+{
+  const btn = $("#theme"), root = document.documentElement, meta = $('meta[name="theme-color"]');
+  const system = matchMedia("(prefers-color-scheme: dark)");
+  const now = () => root.dataset.theme || (system.matches ? "dark" : "light");
+  const SUN = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+  const MOON = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg>';
+  const paint = () => {
+    const dark = now() === "dark";
+    btn.innerHTML = dark ? SUN : MOON;
+    btn.title = btn.ariaLabel = dark ? "Switch to light mode" : "Switch to dark mode";
+    meta.content = dark ? "#0b0b0e" : "#f6f6f8";
+  };
+  btn.addEventListener("click", () => {
+    const next = now() === "dark" ? "light" : "dark";
+    // Choosing what the system already uses drops the override, so the page follows the system again.
+    const followSystem = next === (system.matches ? "dark" : "light");
+    if (followSystem) delete root.dataset.theme; else root.dataset.theme = next;
+    try { followSystem ? localStorage.removeItem("cliptack-theme") : localStorage.setItem("cliptack-theme", next); } catch {}
+    paint();
+  });
+  system.addEventListener("change", paint);
+  paint();
 }
 
 /* ---------- reveal on scroll ---------- */
