@@ -1,0 +1,63 @@
+# Builds the Windows installer and publishes a GitHub release when a version
+# tag is pushed:
+#
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# The MSI is attached twice: under Tauri's versioned name, and as
+# Cliptack-windows-x64.msi. The fixed name is what the README and the site link
+# to, through releases/latest/download/, so a direct download always gets the
+# newest build without either of them changing per version.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      # .cargo/config.toml points target-dir at this machine's D: drive; on the
+      # runner, build next to the checkout instead.
+      CARGO_TARGET_DIR: ${{ github.workspace }}\target
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - run: npm ci
+
+      # The tag and tauri.conf.json must agree, or the installer would carry a
+      # different version from the release it is attached to.
+      - name: Check version
+        shell: pwsh
+        run: |
+          $conf = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          if ("v$conf" -ne "${{ github.ref_name }}") { throw "Tag ${{ github.ref_name }} does not match tauri.conf.json version $conf" }
+
+      - run: npx tauri build --bundles msi
+
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $msi = Get-ChildItem "$env:CARGO_TARGET_DIR\release\bundle\msi\*.msi" | Select-Object -First 1
+          if (-not $msi) { throw "No MSI was built" }
+          Copy-Item $msi.FullName Cliptack-windows-x64.msi
+          $notes = @"
+          **Download:** Cliptack-windows-x64.msi (Windows 10 and 11, 64-bit).
+
+          The installer is not code-signed yet, so Windows SmartScreen may say "Windows protected your PC": choose **More info → Run anyway**. Then press ``Ctrl+Shift+V`` anywhere to open your history.
+
+          Upgrading from Stash: the first launch copies your history, notes, credentials and settings across. See the README.
+          "@
+          gh release create "${{ github.ref_name }}" $msi.FullName Cliptack-windows-x64.msi --title "Cliptack ${{ github.ref_name }}" --notes $notes --generate-notes

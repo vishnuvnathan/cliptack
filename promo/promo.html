@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Cliptack promo</title>
+<!--
+  The Cliptack promo, as a page. Every animation is a paused Web Animation plus
+  a few per-frame hooks, so the whole film is a pure function of time:
+  window.__promo.seek(t) draws frame t. render.mjs steps through it frame by
+  frame in headless Chrome and pipes the screenshots into ffmpeg. Opened
+  directly in a browser it plays in real time, on a loop.
+
+  All clip content is invented demo data.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=block" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #0b0b0e;
+    --panel: #16161a;
+    --panelalt: #1d1d22;
+    --edge: #2a2a31;
+    --accent: #7aa2f7;
+    --z100: #f4f4f5; --z200: #e4e4e7; --z300: #d4d4d8; --z400: #a1a1aa;
+    --z500: #71717a; --z600: #52525b; --z700: #3f3f46; --z800: #27272a;
+    --yellow: #fdf0a6; --yellow-alt: #f7e587; --yellow-edge: #e2cd6e;
+    --pink: #fcd6e4; --pink-alt: #f7c5d7;
+    --blue: #cae1fc; --blue-alt: #b6d3f7;
+    /* The fonts the app really renders in on Windows. */
+    --display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+    --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --mono: Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #000; overflow: hidden; }
+  body.preview { display: grid; place-items: center; height: 100vh; }
+  #stage {
+    position: relative; width: 1920px; height: 1080px; overflow: hidden;
+    background: var(--ink); color: var(--z200); font-family: var(--sans);
+    transform-origin: center;
+  }
+  .abs { position: absolute; }
+  .glow {
+    position: absolute; inset: -200px;
+    background:
+      radial-gradient(900px 600px at 72% 40%, rgba(122,162,247,.16), transparent 70%),
+      radial-gradient(700px 500px at 12% 90%, rgba(253,240,166,.06), transparent 70%);
+  }
+  .grain {
+    position: absolute; inset: 0; pointer-events: none; opacity: .07; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .dots {
+    position: absolute; inset: 0; opacity: .5;
+    background-image: radial-gradient(rgba(255,255,255,.06) 1px, transparent 1px);
+    background-size: 32px 32px;
+    mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
+  }
+
+  /* ---------- type ---------- */
+  .serif { font-family: var(--display); font-weight: 600; letter-spacing: -.035em; color: var(--z100); text-wrap: balance; }
+  .serif em { font-style: normal; color: var(--accent); }
+  .kicker { font-family: var(--mono); font-size: 20px; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); }
+  .sub { font-size: 28px; line-height: 1.45; color: var(--z400); }
+  .sub code, .mono { font-family: var(--mono); }
+
+  /* ---------- scene 1 ---------- */
+  .frag {
+    position: absolute; white-space: nowrap; font-family: var(--mono); font-size: 22px;
+    color: var(--z400); background: rgba(29,29,34,.8); border: 1px solid var(--edge);
+    border-radius: 10px; padding: 12px 18px; opacity: 0;
+  }
+  .hook { position: absolute; left: 0; right: 0; text-align: center; font-size: 100px; line-height: 1.05; opacity: 0; }
+
+  /* ---------- keycaps ---------- */
+  .keys { position: absolute; display: flex; gap: 18px; align-items: center; opacity: 0; }
+  .key {
+    font-family: var(--mono); font-weight: 500; color: var(--z100);
+    background: linear-gradient(#2c2c33, #222228); border: 1px solid #3a3a43;
+    border-radius: 14px; padding: 18px 30px; font-size: 40px; min-width: 96px; text-align: center;
+    box-shadow: 0 8px 0 #121216, 0 14px 30px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08);
+  }
+  .plus { font-family: var(--mono); font-size: 34px; color: var(--z600); }
+  .chip-key {
+    position: absolute; opacity: 0; display: flex; gap: 8px; align-items: center;
+    font-family: var(--mono); font-size: 22px; color: var(--z100);
+    background: rgba(22,22,26,.92); border: 1px solid var(--edge); border-radius: 12px;
+    padding: 10px 16px; box-shadow: 0 20px 40px rgba(0,0,0,.45);
+  }
+  .chip-key b { font-weight: 500; background: var(--z800); border: 1px solid var(--z700); border-radius: 7px; padding: 3px 10px; }
+  .chip-key span { color: var(--z400); font-family: var(--sans); margin-left: 6px; }
+
+  /* ---------- captions (left column) ---------- */
+  .cap { position: absolute; left: 110px; top: 300px; width: 600px; opacity: 0; }
+  .cap .serif { font-size: 70px; line-height: 1.06; margin: 22px 0 26px; }
+  .ops { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+  .ops span { font-family: var(--mono); font-size: 21px; color: var(--accent); border: 1px solid rgba(122,162,247,.35); background: rgba(122,162,247,.08); border-radius: 8px; padding: 6px 12px; }
+
+  /* ---------- the panel ---------- */
+  .panel {
+    position: absolute; left: 790px; top: 150px; width: 1030px; height: 780px;
+    background: var(--panel); border: 1px solid var(--edge); border-radius: 16px; overflow: hidden;
+    box-shadow: 0 50px 120px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.02);
+    opacity: 0; transform-origin: 50% 40%;
+  }
+  .grip { height: 22px; display: grid; place-items: center; }
+  .grip i { width: 46px; height: 4px; border-radius: 4px; background: var(--z700); }
+  .search { height: 58px; display: flex; align-items: center; gap: 14px; padding: 0 24px; border-bottom: 1px solid var(--edge); font-size: 21px; }
+  .search svg { flex: none; }
+  .q { color: var(--z200); font-family: var(--sans); white-space: pre; }
+  .q .op { color: var(--accent); }
+  .ph { color: var(--z500); position: absolute; left: 62px; }
+  .caret { display: inline-block; width: 2px; height: 26px; background: var(--accent); vertical-align: middle; margin-left: 1px; }
+  .count { margin-left: auto; color: var(--z500); font-size: 18px; }
+  .chips { height: 54px; display: flex; gap: 9px; align-items: center; padding: 0 20px; border-bottom: 1px solid var(--edge); }
+  .chips span { font-size: 16px; color: var(--z300); border: 1px solid var(--z700); border-radius: 999px; padding: 5px 14px; white-space: nowrap; }
+  .chips span.on { color: var(--accent); border-color: rgba(122,162,247,.6); background: rgba(122,162,247,.14); }
+  .chips .sep { border: 0; padding: 0; width: 1px; height: 22px; background: var(--edge); }
+  .body { position: absolute; top: 134px; bottom: 42px; left: 0; right: 0; display: flex; }
+  .list { position: relative; width: 370px; border-right: 1px solid var(--edge); overflow: hidden; }
+  .hl { position: absolute; left: 0; right: 0; top: 0; height: 70px; background: rgba(122,162,247,.1); border-left: 3px solid var(--accent); }
+  .row { position: relative; height: 70px; display: flex; align-items: center; gap: 14px; padding: 0 18px; overflow: hidden; }
+  .ic { flex: none; width: 40px; height: 40px; border: 1px solid var(--z700); border-radius: 7px; display: grid; place-items: center; font-size: 11px; color: var(--z500); font-family: var(--sans); letter-spacing: .02em; }
+  .ic.cred { color: var(--accent); border-color: rgba(122,162,247,.5); }
+  .ic.sw { background: var(--accent); border: 0; }
+  .rt { min-width: 0; flex: 1; }
+  .rt b { display: block; font-weight: 400; font-size: 17px; color: var(--z100); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rt small { font-size: 14px; color: var(--z500); }
+  .pin { color: var(--accent); font-size: 15px; }
+  .preview { position: relative; flex: 1; }
+  .pv { position: absolute; inset: 0; opacity: 0; }
+  .pv.first { opacity: 1; }
+  .pvh { height: 50px; display: flex; align-items: center; gap: 12px; padding: 0 22px; border-bottom: 1px solid var(--edge); font-size: 17px; color: var(--z100); }
+  .tag { font-size: 12px; letter-spacing: .06em; color: var(--z500); background: var(--z800); border-radius: 5px; padding: 3px 8px; }
+  .pvh .used { margin-left: auto; font-size: 14px; color: var(--z500); }
+  .pvb { padding: 22px; font-family: var(--mono); font-size: 17px; line-height: 1.7; color: var(--z200); white-space: pre; }
+  .pvb .k { color: #c792ea; } .pvb .s { color: #c3e88d; } .pvb .f { color: #82aaff; } .pvb .n { color: #f78c6c; } .pvb .c { color: var(--z500); }
+  .pvb.md { font-family: var(--sans); font-size: 19px; white-space: normal; }
+  .pvb.md h4 { margin: 0 0 14px; font-size: 24px; font-weight: 600; color: var(--z100); }
+  .pvb.md div { margin: 8px 0; }
+  .foot { position: absolute; bottom: 0; left: 0; right: 0; height: 42px; border-top: 1px solid var(--edge); display: flex; gap: 22px; align-items: center; padding: 0 20px; font-size: 14px; color: var(--z500); }
+  .foot .r { margin-left: auto; }
+  .menu {
+    position: absolute; left: 400px; top: 210px; width: 300px; opacity: 0;
+    background: #1f1f25; border: 1px solid var(--z700); border-radius: 12px; padding: 8px;
+    box-shadow: 0 30px 60px rgba(0,0,0,.55); transform-origin: top left;
+  }
+  .menu .mh { font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--z500); padding: 8px 12px 10px; }
+  .menu div.mi { position: relative; font-size: 17px; color: var(--z200); padding: 10px 12px; border-radius: 7px; }
+  .menu .mhl { position: absolute; left: 8px; right: 8px; top: 44px; height: 43px; border-radius: 7px; background: rgba(122,162,247,.18); }
+  .toast {
+    position: absolute; left: 50%; bottom: 62px; transform: translateX(-50%); opacity: 0; white-space: nowrap;
+    background: var(--accent); color: #16161a; font-weight: 500; font-size: 17px; padding: 10px 18px; border-radius: 10px;
+  }
+
+  /* ---------- desktop + stickies ---------- */
+  .desk { position: absolute; left: 760px; top: 110px; width: 1080px; height: 860px; opacity: 0; border-radius: 14px; overflow: hidden; background: #111115; border: 1px solid #1f1f25; }
+  .desk .bar { height: 40px; background: #17171c; display: flex; gap: 8px; align-items: center; padding: 0 16px; }
+  .desk .bar i { width: 12px; height: 12px; border-radius: 50%; background: #2c2c33; }
+  .desk .tab { margin-left: 18px; font-size: 15px; color: var(--z500); font-family: var(--mono); }
+  .desk .ln { height: 13px; border-radius: 6px; margin: 19px 0 0 70px; }
+  .sticky {
+    position: absolute; border-radius: 12px; overflow: hidden; opacity: 0;
+    box-shadow: 0 30px 60px rgba(0,0,0,.55), 0 4px 12px rgba(0,0,0,.3);
+    color: #18181b; transform-origin: top left;
+  }
+  .sticky .st { height: 38px; display: flex; align-items: center; gap: 10px; padding: 0 14px; font-size: 14px; color: #46464e; }
+  .sticky .st .x { margin-left: auto; letter-spacing: 8px; color: #70707a; }
+  .sticky .sb { padding: 6px 20px 20px; font-family: var(--mono); font-size: 18px; line-height: 1.6; white-space: pre; }
+  .sticky.y { background: var(--yellow); } .sticky.y .st { background: var(--yellow-alt); }
+  .sticky.p { background: var(--pink); } .sticky.p .st { background: var(--pink-alt); }
+  .sticky.b { background: var(--blue); } .sticky.b .st { background: var(--blue-alt); }
+  .sticky .sb.note { font-family: var(--sans); font-size: 21px; line-height: 1.7; }
+  .ontop { position: absolute; opacity: 0; font-family: var(--mono); font-size: 18px; color: var(--z400); }
+
+  /* ---------- privacy ---------- */
+  .pcard {
+    position: absolute; top: 400px; width: 540px; height: 500px; opacity: 0;
+    background: linear-gradient(180deg, #17171c, #121216); border: 1px solid var(--edge); border-radius: 22px; padding: 40px;
+  }
+  .pcard .serif { font-size: 38px; line-height: 1.12; margin-top: 30px; }
+  .pvis { height: 200px; border-radius: 14px; background: #0e0e12; border: 1px solid #202027; position: relative; overflow: hidden; }
+  .field { position: absolute; left: 26px; right: 26px; height: 64px; border-radius: 10px; border: 1px solid var(--z700); display: flex; align-items: center; padding: 0 18px; gap: 12px; font-size: 18px; color: var(--z400); }
+  .field .v { font-family: var(--mono); color: var(--z100); letter-spacing: .2em; }
+  .field .ok { margin-left: auto; color: #4ade80; font-family: var(--mono); font-size: 16px; }
+  .field .no { margin-left: auto; color: #f87171; font-family: var(--mono); font-size: 16px; }
+
+  /* ---------- numbers ---------- */
+  .stat { position: absolute; top: 440px; width: 560px; text-align: left; opacity: 0; }
+  .stat .big { font-family: var(--display); font-weight: 600; font-size: 200px; line-height: 1; color: var(--z100); letter-spacing: -.055em; }
+  .stat .big small { font-size: 76px; color: var(--accent); letter-spacing: -.03em; margin-left: 14px; }
+  .stat .lbl { font-family: var(--mono); font-size: 24px; color: var(--z400); margin-top: 26px; border-top: 1px solid var(--edge); padding-top: 22px; }
+
+  /* ---------- end card ---------- */
+  .end { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+  .end .logo { opacity: 0; }
+  .end h1 { font-family: var(--display); font-weight: 600; font-size: 168px; line-height: 1.05; margin: 30px 0 0; color: var(--z100); letter-spacing: -.045em; opacity: 0; }
+  .end h1 em { color: var(--accent); font-style: normal; }
+  .end p { margin: 18px 0 0; opacity: 0; }
+  .end .url { font-family: var(--mono); font-size: 26px; color: var(--accent); margin-top: 44px; opacity: 0; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="glow"></div>
+  <div class="dots"></div>
+
+  <!-- ===== 1. hook ===== -->
+  <div id="frags"></div>
+  <div class="hook serif" id="hook1" style="top:420px">You copy <em>hundreds</em> of things a day.</div>
+  <div class="hook serif" id="hook2" style="top:420px">Windows keeps the <em>last</em> one.</div>
+
+  <!-- ===== 2. summon ===== -->
+  <div class="keys" id="keys" style="left:0;right:0;justify-content:center;top:470px">
+    <div class="key">Ctrl</div><div class="plus">+</div><div class="key">Shift</div><div class="plus">+</div><div class="key" id="kV">V</div>
+  </div>
+
+  <!-- faux desktop behind the stickies (scene 5) -->
+  <div class="desk" id="desk">
+    <div class="bar"><i></i><i></i><i></i><span class="tab">api/handlers.ts</span></div>
+    <div id="desklines"></div>
+  </div>
+
+  <div class="panel" id="panel">
+    <div class="grip"><i></i></div>
+    <div class="search">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#71717a" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <span class="ph" id="ph">Search, or type app: type: folder: is: sort:</span>
+      <span class="q" id="q"></span><span class="caret" id="caret"></span>
+      <span class="count" id="count">11</span>
+    </div>
+    <div class="chips">
+      <span class="on">All</span><span>Work</span><span>Snippets</span><span class="sep"></span>
+      <span>Creds</span><span>Text</span><span>Image</span><span>Link</span><span>Code</span><span class="sep"></span>
+      <span>Code.exe</span><span>Figma.exe</span><span>slack.exe</span>
+    </div>
+    <div class="body">
+      <div class="list" id="list">
+        <div class="hl" id="hl"></div>
+        <div class="row" data-r="0"><div class="ic cred"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 9.2-9.2m-3 3 3 3m-6 0 2 2"/></svg></div><div class="rt"><b>GitHub — demo account</b><small>cred · chrome.exe · 1d</small></div><span class="pin">●</span></div>
+        <div class="row" data-r="1"><div class="ic">TEXT</div><div class="rt"><b>Release notes before the 3pm sync</b><small>text · slack.exe · 2h</small></div><span class="pin">●</span></div>
+        <div class="row" data-r="2"><div class="ic">MD</div><div class="rt"><b>Launch checklist</b><small>note · 1d</small></div></div>
+        <div class="row" data-r="3"><div class="ic">LINK</div><div class="rt"><b>https://github.com/vishnuvnathan/cliptack</b><small>link · chrome.exe · 1d</small></div></div>
+        <div class="row" data-r="4"><div class="ic">CODE</div><div class="rt"><b>pub fn classify(raw: &amp;str) -&gt; ContentType</b><small>code · Code.exe · 1d</small></div></div>
+        <div class="row" data-r="5"><div class="ic">CODE</div><div class="rt"><b>def greet(name: str) -&gt; str:</b><small>code · Code.exe · 2d</small></div></div>
+        <div class="row" data-r="6"><div class="ic">JSON</div><div class="rt"><b>{"name":"cliptack","version":"0.1.0","private":true}</b><small>json · Code.exe · 2d</small></div></div>
+        <div class="row" data-r="7"><div class="ic sw"></div><div class="rt"><b>#7aa2f7</b><small>color · Figma.exe · 3d</small></div></div>
+        <div class="row" data-r="8"><div class="ic">EMAIL</div><div class="rt"><b>hello@example.com</b><small>email · OUTLOOK.EXE · 4d</small></div></div>
+      </div>
+      <div class="preview">
+        <div class="pv first" id="pv1"><div class="pvh">Release notes before the 3pm sync <span class="tag">TEXT</span><span class="used">used 6×</span></div><div class="pvb">Pick up the release notes from Sam before the 3pm sync.</div></div>
+        <div class="pv" id="pv2"><div class="pvh">Launch checklist <span class="tag">NOTE</span></div><div class="pvb md"><h4>Launch checklist</h4><div>☑ Rename to Cliptack</div><div>☑ 117 tests green</div><div>☐ Record the promo</div><div>☐ Publish the site</div></div></div>
+        <div class="pv" id="pv3"><div class="pvh">github.com/vishnuvnathan/cliptack <span class="tag">LINK</span></div><div class="pvb">https://github.com/vishnuvnathan/cliptack</div></div>
+        <div class="pv" id="pv4"><div class="pvh">classify <span class="tag">CODE</span><span class="used">Code.exe</span></div><div class="pvb"><span class="k">pub fn</span> <span class="f">classify</span>(raw: &amp;<span class="k">str</span>) -&gt; ContentType {
+    <span class="k">let</span> t = raw.<span class="f">trim</span>();
+    <span class="k">if</span> <span class="f">looks_like_url</span>(t) { <span class="k">return</span> ContentType::Link; }
+    <span class="k">if</span> <span class="f">is_hex_colour</span>(t) { <span class="k">return</span> ContentType::Color; }
+    <span class="k">if</span> <span class="f">code_score</span>(t) &gt; <span class="n">0.6</span> { <span class="k">return</span> ContentType::Code; }
+    ContentType::Text
+}</div></div>
+        <div class="pv" id="pv5"><div class="pvh">greet <span class="tag">CODE</span><span class="used">Code.exe</span></div><div class="pvb"><span class="k">def</span> <span class="f">greet</span>(name: <span class="k">str</span>) -&gt; <span class="k">str</span>:
+    <span class="c"># used 14 times this week</span>
+    <span class="k">return</span> <span class="s">f"Hello, {name}!"</span></div></div>
+        <div class="pv" id="pv6"><div class="pvh">package.json <span class="tag">JSON</span><span class="used">Snippets</span></div><div class="pvb">{<span class="s">"name"</span>:<span class="s">"cliptack"</span>,<span class="s">"version"</span>:<span class="s">"0.1.0"</span>,<span class="s">"private"</span>:<span class="k">true</span>}</div></div>
+        <div class="pv" id="pv7"><div class="pvh">package.json <span class="tag">JSON</span><span class="used">pasted as · Prettify</span></div><div class="pvb" id="pretty"><div>{</div><div>  <span class="s">"name"</span>: <span class="s">"cliptack"</span>,</div><div>  <span class="s">"version"</span>: <span class="s">"0.1.0"</span>,</div><div>  <span class="s">"private"</span>: <span class="k">true</span></div><div>}</div></div></div>
+      </div>
+    </div>
+    <div class="menu" id="menu">
+      <div class="mh">Paste as</div>
+      <div class="mhl" id="mhl"></div>
+      <div class="mi">Prettify JSON</div><div class="mi">Minify JSON</div><div class="mi">Base64 encode</div><div class="mi">URL encode</div><div class="mi">UPPER CASE</div><div class="mi">snake_case</div>
+    </div>
+    <div class="toast" id="toast">Pasted prettified · the saved clip is unchanged</div>
+    <div class="foot"><span>↵ paste</span><span>Ctrl+↵ copy</span><span>Ctrl+T as…</span><span>Ctrl+O sticky</span><span>Ctrl+P pin</span><span class="r">Esc hide</span></div>
+  </div>
+
+  <!-- floating shortcut chips -->
+  <div class="chip-key" id="ckT" style="left:1340px;top:92px"><b>Ctrl</b><b>T</b><span>paste as…</span></div>
+  <div class="chip-key" id="ckO" style="left:1340px;top:92px"><b>Ctrl</b><b>O</b><span>tack to screen</span></div>
+
+  <!-- stickies -->
+  <div class="sticky y" id="s1" style="left:1240px;top:180px;width:470px;height:270px">
+    <div class="st">package.json<span class="x">⧉ ✕</span></div>
+    <div class="sb" id="s1b">{
+  "name": "cliptack",
+  "version": "0.1.0",
+  "private": true
+}</div>
+  </div>
+  <div class="sticky p" id="s2" style="left:880px;top:430px;width:400px;height:300px">
+    <div class="st">Note<span class="x">⧉ ✕</span></div>
+    <div class="sb note">Ship v0.1<br>☑ 117 tests green<br>☑ promo video<br>☐ publish the release</div>
+  </div>
+  <div class="sticky b" id="s3" style="left:1390px;top:560px;width:330px;height:250px">
+    <div class="st">#7aa2f7<span class="x">⧉ ✕</span></div>
+    <div style="margin:6px 20px 0;height:150px;border-radius:10px;background:#7aa2f7"></div>
+  </div>
+  <div class="ontop" id="ontop" style="left:762px;top:996px">always on top · editable notes · back after a restart</div>
+
+  <!-- captions -->
+  <div class="cap" id="cap1"><div class="kicker">01 — Summon</div><div class="serif">Your whole history, <em>one</em> keystroke away.</div><div class="sub">Press <span class="mono">Ctrl+Shift+V</span> anywhere. Arrow down, hit Enter, and it pastes into the window you came from.</div></div>
+  <div class="cap" id="cap2"><div class="kicker">02 — Search</div><div class="serif">Search like a <em>developer.</em></div><div class="sub">Prefix search over everything, with operators when you need them.</div><div class="ops"><span>app:Code</span><span>type:code</span><span>is:pinned</span><span>sort:used</span><span>"exact phrase"</span></div></div>
+  <div class="cap" id="cap3"><div class="kicker">03 — Paste as</div><div class="serif">Reshape it on the <em>way out.</em></div><div class="sub">Prettify JSON, decode base64, change case. Only the paste changes — the history keeps what you copied.</div></div>
+  <div class="cap" id="cap4"><div class="kicker">04 — Tack</div><div class="serif"><em>Tack</em> any clip to your screen.</div><div class="sub">A snippet, a note, a colour — popped out into a small card that floats over your work.</div></div>
+
+  <!-- ===== 6. privacy ===== -->
+  <div class="abs" id="privHead" style="left:110px;top:150px;opacity:0"><div class="kicker">05 — Private by design</div><div class="serif" style="font-size:72px;margin-top:20px">Everything stays <em>on your machine.</em></div></div>
+  <div class="pcard" id="pc1" style="left:110px">
+    <div class="pvis">
+      <svg width="460" height="200" viewBox="0 0 460 200" fill="none">
+        <rect x="40" y="58" width="130" height="84" rx="8" stroke="#a1a1aa" stroke-width="3"/><path d="M24 152h162" stroke="#a1a1aa" stroke-width="3" stroke-linecap="round"/>
+        <path d="M190 100h120" stroke="#52525b" stroke-width="3" stroke-dasharray="6 9"/>
+        <path d="M338 120a26 26 0 0 1 4-52 36 36 0 0 1 68 12 22 22 0 0 1-6 40z" stroke="#52525b" stroke-width="3"/>
+        <circle cx="250" cy="100" r="24" fill="#0e0e12" stroke="#f87171" stroke-width="3"/><path d="m240 90 20 20m0-20-20 20" stroke="#f87171" stroke-width="3" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="serif">Nothing leaves your machine.</div>
+  </div>
+  <div class="pcard" id="pc2" style="left:690px">
+    <div class="pvis">
+      <div class="field" style="top:30px">Password <span class="v">••••••••••</span><span class="ok">✓ pasted</span></div>
+      <div class="field" style="top:110px">Message <span class="v"></span><span class="no">✕ refused</span></div>
+    </div>
+    <div class="serif">Passwords paste only into password fields.</div>
+  </div>
+  <div class="pcard" id="pc3" style="left:1270px">
+    <div class="pvis">
+      <div class="abs" style="left:20px;top:16px;font-family:var(--mono);font-size:14px;color:#f87171">● You are presenting</div>
+      <div class="abs" style="left:20px;right:20px;top:46px;bottom:20px;border:2px solid rgba(248,113,113,.5);border-radius:8px;background:repeating-linear-gradient(90deg,#16161b 0 60px,#141418 60px 120px)"></div>
+      <div class="abs" style="left:150px;top:70px;width:200px;height:100px;background:#000;border-radius:6px;display:grid;place-items:center;font-family:var(--mono);font-size:13px;color:#52525b">not captured</div>
+    </div>
+    <div class="serif">Hidden from screen shares.</div>
+  </div>
+
+  <!-- ===== 7. numbers ===== -->
+  <div class="abs" id="numHead" style="left:110px;top:150px;opacity:0"><div class="kicker">06 — Quiet</div><div class="serif" style="font-size:72px;margin-top:20px">You won't <em>notice</em> it's running.</div></div>
+  <div class="stat" id="st1" style="left:110px"><div class="big"><span id="n1">0.00</span><small>%</small></div><div class="lbl">CPU when idle</div></div>
+  <div class="stat" id="st2" style="left:700px"><div class="big"><span id="n2">0</span><small>MB</small></div><div class="lbl">memory when idle</div></div>
+  <div class="stat" id="st3" style="left:1290px"><div class="big"><span id="n3">0</span></div><div class="lbl">automated tests, plus ~30 behaviours checked by running the app</div></div>
+
+  <!-- ===== 8. end ===== -->
+  <div class="end"><div>
+    <svg class="logo" id="logo" width="170" height="170" viewBox="0 0 128 128"><circle cx="64" cy="64" r="62" fill="#18181b" stroke="#2a2a31" stroke-width="2"/><path d="M28 30h20v-8h32v8h20v70H28z" fill="#7aa2f7"/><rect x="40" y="42" width="48" height="46" fill="#18181b"/></svg>
+    <h1 id="title">Clip<em>tack</em></h1>
+    <p class="sub" id="tag">A clipboard history that stays on your machine.</p>
+    <p class="sub" id="tag2" style="font-size:22px;color:#71717a">Free and open source · Windows 10 and 11</p>
+    <div class="url" id="url">github.com/vishnuvnathan/cliptack</div>
+  </div></div>
+
+  <div class="grain"></div>
+</div>
+
+<script>
+const DURATION = 34;
+const anims = [], hooks = [];
+const EASE = "cubic-bezier(.22,1,.36,1)";        // ease-out-quint-ish
+const SPRING = "cubic-bezier(.34,1.56,.64,1)";   // small overshoot
+const IN = "cubic-bezier(.55,0,.9,.4)";
+const $ = (s) => document.querySelector(s);
+
+/** One paused, seekable animation. fill:forwards only, so an element's CSS is
+ *  its state before its first animation and later animations win after. */
+function A(target, frames, start, dur, easing = EASE) {
+  const els = typeof target === "string" ? document.querySelectorAll(target) : [target];
+  els.forEach((el) => {
+    const a = el.animate(frames, { delay: start * 1000, duration: dur * 1000, easing, fill: "forwards" });
+    a.pause(); anims.push(a);
+  });
+}
+const fadeIn = (t, s, d = .6, y = 30) => A(t, [{ opacity: 0, transform: `translateY(${y}px)` }, { opacity: 1, transform: "none" }], s, d);
+const fadeOut = (t, s, d = .45, y = -20) => A(t, [{ opacity: 1, transform: "none" }, { opacity: 0, transform: `translateY(${y}px)` }], s, d, IN);
+const lerp = (a, b, k) => a + (b - a) * k;
+const clamp = (x) => Math.max(0, Math.min(1, x));
+const ease = (k) => 1 - Math.pow(1 - clamp(k), 4);
+
+/* ---------- 1. hook: clipboard fragments drifting through ---------- */
+const FRAGS = ["git push origin main", "#7aa2f7", "https://docs.rs/serde", "{\"id\": 42}", "Meeting moved to 3pm",
+  "npm run tauri dev", "SELECT * FROM items", "hello@example.com", "Ctrl+Shift+V", "rgba(0,0,0,.5)",
+  "cargo test --release", "192.168.1.20", "TODO: ship it", "\"exact phrase\"", "font-feature-settings", "+1 (555) 010-2030",
+  "ssh deploy@staging", "const x = await fetch()", "OK, see you at 4", "pnpm i -D vite"];
+let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+const fragBox = $("#frags");
+FRAGS.forEach((txt, i) => {
+  const el = document.createElement("div"); el.className = "frag"; el.textContent = txt;
+  let y = 60 + (i * 51) % 960; if (y > 330 && y < 590) y += 280; const depth = .55 + rnd() * .6, x0 = -500 + rnd() * 2200;
+  el.style.top = y + "px"; el.style.left = "0px";
+  el.style.fontSize = 16 + depth * 10 + "px"; el.style.filter = depth < .75 ? "blur(1.5px)" : "none";
+  fragBox.appendChild(el);
+  const speed = 160 * depth * (i % 2 ? 1 : -1);
+  A(el, [{ transform: `translateX(${x0}px)` }, { transform: `translateX(${x0 + speed * 4.4}px)` }], 0, 4.4, "linear");
+  A(el, [{ opacity: 0 }, { opacity: .25 + depth * .45 }], .05 * i, .6);
+  A(el, [{ opacity: .25 + depth * .45 }, { opacity: 0 }], 3.4, .6);
+});
+fadeIn("#hook1", .35, .8, 40); fadeOut("#hook1", 1.95, .4);
+fadeIn("#hook2", 2.25, .7, 40); fadeOut("#hook2", 3.55, .4);
+
+/* ---------- 2. summon ---------- */
+A("#keys", [{ opacity: 0, transform: "scale(.85)" }, { opacity: 1, transform: "none" }], 3.9, .5, SPRING);
+A("#keys .key", [{ transform: "none", boxShadow: "0 8px 0 #121216, 0 14px 30px rgba(0,0,0,.5)" }, { transform: "translateY(7px)", boxShadow: "0 1px 0 #121216, 0 4px 10px rgba(0,0,0,.5)" }], 4.65, .12, "linear");
+A("#keys .key", [{ background: "linear-gradient(#2c2c33,#222228)" }, { background: "linear-gradient(#7aa2f7,#6286d8)", color: "#101014" }], 4.7, .15, "linear");
+A("#keys", [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-120px) scale(.7)" }], 5.0, .45, IN);
+A("#panel", [{ opacity: 0, transform: "translateY(40px) scale(.94)" }, { opacity: 1, transform: "none" }], 5.15, .75, SPRING);
+document.querySelectorAll("#panel .row").forEach((r, i) => A(r, [{ opacity: 0, transform: "translateX(-14px)" }, { opacity: 1, transform: "none" }], 5.4 + i * .04, .4));
+A("#hl", [{ transform: "translateY(70px)" }, { transform: "translateY(70px)" }], 0, .01);
+fadeIn("#cap1", 5.6, .8);
+fadeOut("#cap1", 7.9, .4);
+
+/* ---------- 3. search ---------- */
+const move = (s, from, to, d = .22) => A("#hl", [{ transform: `translateY(${from * 70}px)` }, { transform: `translateY(${to * 70}px)` }], s, d);
+const swap = (from, to, s) => { A(from, [{ opacity: 1 }, { opacity: 0 }], s, .15, "linear"); A(to, [{ opacity: 0 }, { opacity: 1 }], s, .2, "linear"); };
+move(6.6, 1, 2); swap("#pv1", "#pv2", 6.6);
+move(7.1, 2, 3); swap("#pv2", "#pv3", 7.1);
+fadeIn("#cap2", 8.3, .8);
+
+const QUERY = "app:Code type:code";
+const TYPE_AT = 8.6, TYPE_CPS = 15, CLEAR_AT = 12.0;
+hooks.push((t) => {
+  let n = 0;
+  if (t >= TYPE_AT && t < CLEAR_AT) n = Math.min(QUERY.length, Math.floor((t - TYPE_AT) * TYPE_CPS));
+  else if (t >= CLEAR_AT) n = Math.max(0, QUERY.length - Math.floor((t - CLEAR_AT) * 60));
+  const s = QUERY.slice(0, n);
+  $("#q").innerHTML = s.split(" ").map((w) => {
+    const m = w.match(/^(app:|type:)(.*)$/);
+    return m && m[2] ? `<span class="op">${m[1]}</span>${m[2]}` : w;
+  }).join(" ");
+  $("#ph").style.opacity = n ? 0 : 1;
+  const filtered = t >= 10.0 && t < 12.3;
+  $("#count").textContent = filtered ? "2" : "11";
+  // caret: solid while typing, blinking otherwise
+  const typing = t >= TYPE_AT && t < TYPE_AT + QUERY.length / TYPE_CPS + .1;
+  $("#caret").style.opacity = typing || Math.floor(t * 2) % 2 === 0 ? 1 : 0;
+});
+// rows that do not match collapse; the two Code.exe code rows remain
+[0, 1, 2, 3, 6, 7, 8].forEach((r) => {
+  const el = document.querySelector(`.row[data-r="${r}"]`);
+  A(el, [{ height: "70px", opacity: 1 }, { height: "0px", opacity: 0 }], 10.0 + r * .02, .4);
+  A(el, [{ height: "0px", opacity: 0 }, { height: "70px", opacity: 1 }], 12.3, .4);
+});
+move(10.05, 3, 0, .35); swap("#pv3", "#pv4", 10.1);
+move(10.9, 0, 1); swap("#pv4", "#pv5", 10.9);
+fadeOut("#cap2", 11.9, .4);
+
+/* ---------- 4. paste as ---------- */
+move(12.45, 1, 6, .4); swap("#pv5", "#pv6", 12.6);
+fadeIn("#cap3", 12.5, .8);
+A("#ckT", [{ opacity: 0, transform: "translateY(16px) scale(.9)" }, { opacity: 1, transform: "none" }], 13.1, .45, SPRING);
+A("#ckT", [{ opacity: 1 }, { opacity: 0 }], 15.2, .3);
+A("#menu", [{ opacity: 0, transform: "scale(.92)" }, { opacity: 1, transform: "none" }], 13.35, .35, SPRING);
+A("#mhl", [{ opacity: 0 }, { opacity: 1 }], 13.6, .2);
+A("#menu", [{ opacity: 1 }, { opacity: 0, transform: "scale(.97)" }], 14.4, .2, IN);
+swap("#pv6", "#pv7", 14.5);
+document.querySelectorAll("#pretty > div").forEach((d, i) => A(d, [{ opacity: 0, transform: "translateX(-12px)" }, { opacity: 1, transform: "none" }], 14.55 + i * .07, .35));
+A("#toast", [{ opacity: 0, transform: "translate(-50%, 14px)" }, { opacity: 1, transform: "translate(-50%, 0)" }], 14.7, .4, SPRING);
+A("#toast", [{ opacity: 1 }, { opacity: 0 }], 16.1, .3);
+fadeOut("#cap3", 16.1, .4);
+
+/* ---------- 5. tack ---------- */
+A("#ckO", [{ opacity: 0, transform: "translateY(16px) scale(.9)" }, { opacity: 1, transform: "none" }], 16.5, .45, SPRING);
+A("#ckO", [{ opacity: 1 }, { opacity: 0 }], 18.0, .3);
+// the JSON row lifts out of the list and becomes a card: start at the row's box
+{
+  const row = { x: 790, y: 150 + 134 + 6 * 70, w: 370, h: 70 }, card = { x: 1240, y: 180, w: 470, h: 270 };
+  const from = `translate(${row.x - card.x}px, ${row.y - card.y}px) scale(${row.w / card.w}, ${row.h / card.h})`;
+  A("#s1", [{ opacity: 0, transform: from, background: "#1d1d22" },
+            { opacity: 1, transform: from, background: "#1d1d22", offset: .12 },
+            { opacity: 1, transform: "rotate(-2deg)", background: "#fdf0a6" }], 16.9, .9, EASE);
+  A("#s1 .st, #s1b", [{ opacity: 0 }, { opacity: 1 }], 17.6, .3);
+}
+A("#panel", [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(.96)" }], 18.0, .45, IN);
+A("#desk", [{ opacity: 0 }, { opacity: 1 }], 18.0, .7);
+A("#s2", [{ opacity: 0, transform: "translateY(-60px) rotate(4deg) scale(1.06)" }, { opacity: 1, transform: "rotate(1.5deg)" }], 18.5, .7, SPRING);
+A("#s3", [{ opacity: 0, transform: "translateY(-60px) rotate(-5deg) scale(1.06)" }, { opacity: 1, transform: "rotate(-1deg)" }], 18.8, .7, SPRING);
+fadeIn("#ontop", 19.4, .6, 10);
+fadeIn("#cap4", 17.2, .8);
+["#cap4", "#desk", "#ontop"].forEach((s) => A(s, [{ opacity: 1 }, { opacity: 0 }], 21.1, .45, IN));
+A("#s1", [{ opacity: 1, transform: "rotate(-2deg)" }, { opacity: 0, transform: "rotate(-2deg) translateY(-40px)" }], 21.1, .45, IN);
+A("#s2", [{ opacity: 1, transform: "rotate(1.5deg)" }, { opacity: 0, transform: "rotate(1.5deg) translateY(-40px)" }], 21.15, .45, IN);
+A("#s3", [{ opacity: 1, transform: "rotate(-1deg)" }, { opacity: 0, transform: "rotate(-1deg) translateY(-40px)" }], 21.2, .45, IN);
+// editor lines behind the stickies
+{
+  const box = $("#desklines"), cols = ["#3a3a46", "#3b4a6b", "#4b3a5e", "#3f5240", "#2f2f38"];
+  for (let i = 0; i < 34; i++) {
+    const l = document.createElement("div"); l.className = "ln";
+    l.style.width = 120 + ((i * 137) % 520) + "px"; l.style.marginLeft = 70 + (i % 5 === 0 ? 0 : (i % 3) * 36) + "px";
+    l.style.background = cols[i % cols.length]; box.appendChild(l);
+  }
+}
+
+/* ---------- 6. privacy ---------- */
+fadeIn("#privHead", 21.6, .8);
+[["#pc1", 22.2], ["#pc2", 22.7], ["#pc3", 23.2]].forEach(([s, t]) => A(s, [{ opacity: 0, transform: "translateY(50px)" }, { opacity: 1, transform: "none" }], t, .8));
+["#privHead", "#pc1", "#pc2", "#pc3"].forEach((s, i) => A(s, [{ opacity: 1 }, { opacity: 0 }], 26.2 + i * .05, .4, IN));
+
+/* ---------- 7. numbers ---------- */
+fadeIn("#numHead", 26.7, .8);
+[["#st1", 27.1], ["#st2", 27.35], ["#st3", 27.6]].forEach(([s, t]) => fadeIn(s, t, .8, 40));
+hooks.push((t) => {
+  const k = (s) => ease((t - s) / 1.4);
+  $("#n1").textContent = (0.02 * k(27.1)).toFixed(2);
+  $("#n2").textContent = Math.round(31 * k(27.35));
+  $("#n3").textContent = Math.round(117 * k(27.6));
+});
+["#numHead", "#st1", "#st2", "#st3"].forEach((s, i) => A(s, [{ opacity: 1 }, { opacity: 0 }], 29.9 + i * .05, .4, IN));
+
+/* ---------- 8. end card ---------- */
+A("#logo", [{ opacity: 0, transform: "scale(.6) rotate(-12deg)" }, { opacity: 1, transform: "none" }], 30.3, .8, SPRING);
+fadeIn("#title", 30.5, .9, 40);
+fadeIn("#tag", 30.9, .7, 20);
+fadeIn("#tag2", 31.1, .7, 20);
+fadeIn("#url", 31.4, .7, 20);
+
+/* ---------- clock ---------- */
+function seek(t) {
+  for (const a of anims) a.currentTime = t * 1000;
+  for (const h of hooks) h(t);
+}
+window.__promo = { seek, DURATION };
+seek(0);
+
+if (!location.search.includes("render")) {
+  document.body.classList.add("preview");
+  const fit = () => { const s = Math.min(innerWidth / 1920, innerHeight / 1080); $("#stage").style.transform = `scale(${s})`; };
+  fit(); addEventListener("resize", fit);
+  document.fonts.ready.then(() => {
+    const t0 = performance.now();
+    const tick = (now) => { seek(((now - t0) / 1000) % DURATION); requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  });
+}
+</script>
+</body>
+</html>

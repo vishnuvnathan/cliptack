@@ -5,8 +5,10 @@ lets you tack any clip to your screen.**
 
 ![Cliptack panel demo](docs/media/demo.gif)
 
-**[Download for Windows](https://github.com/vishnuvnathan/cliptack/releases/latest)**
+**[Download for Windows](https://github.com/vishnuvnathan/cliptack/releases/latest/download/Cliptack-windows-x64.msi)**
+([all releases](https://github.com/vishnuvnathan/cliptack/releases))
 · Windows 10 and 11 · free and open source ([MIT](LICENSE))
+· [website and 34-second film](https://vishnuvnathan.github.io/cliptack/)
 
 Install it, then press `Ctrl+Shift+V` anywhere to open your history. The
 installer is not code-signed yet, so Windows SmartScreen may say "Windows

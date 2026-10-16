@@ -1,0 +1,702 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cliptack — a clipboard history that stays on your machine</title>
+<meta name="description" content="Cliptack is a free, open-source clipboard history for Windows. Everything stays on your machine. Search like a developer, paste as anything, and tack any clip to your screen." />
+<meta name="theme-color" content="#0b0b0e" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Cliptack — a clipboard history that stays on your machine" />
+<meta property="og:description" content="Free and open source for Windows 10 and 11. Search your history, paste as anything, and tack any clip to your screen." />
+<meta property="og:image" content="https://vishnuvnathan.github.io/cliptack/media/og.png" />
+<meta property="og:url" content="https://vishnuvnathan.github.io/cliptack/" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Ccircle cx='64' cy='64' r='62' fill='%2318181b'/%3E%3Cpath d='M28 30h20v-8h32v8h20v70H28z' fill='%237aa2f7'/%3E%3Crect x='40' y='42' width='48' height='46' fill='%2318181b'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #0b0b0e;
+    --ink2: #101014;
+    --panel: #16161a;
+    --panelalt: #1d1d22;
+    --edge: #2a2a31;
+    --accent: #7aa2f7;
+    --accent-dim: rgba(122,162,247,.14);
+    --z100: #f4f4f5; --z200: #e4e4e7; --z300: #d4d4d8; --z400: #a1a1aa;
+    --z500: #71717a; --z600: #52525b; --z700: #3f3f46; --z800: #27272a;
+    /* The app renders in Windows' own fonts (Segoe UI, Consolas), so the site
+       does too. Elsewhere it falls back to the system UI font and JetBrains Mono. */
+    --display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: Consolas, "JetBrains Mono", ui-monospace, monospace;
+    --gutter: clamp(16px, 4vw, 56px);
+    --max: 1240px;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--ink); color: var(--z300); font-family: var(--sans);
+    font-size: 17px; line-height: 1.6; -webkit-font-smoothing: antialiased; overflow-x: hidden;
+  }
+  a { color: inherit; }
+  ::selection { background: rgba(122,162,247,.35); color: #fff; }
+  .grain {
+    position: fixed; inset: 0; pointer-events: none; z-index: 100; opacity: .06; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 var(--gutter); }
+  h1, h2, h3 { text-wrap: balance; }
+  .serif { font-family: var(--display); font-weight: 600; color: var(--z100); letter-spacing: -.03em; }
+  .serif em, h1 em, h2 em { font-style: normal; color: var(--accent); }
+  .kicker { font-family: var(--mono); font-size: 13px; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); }
+  .mono, code, kbd { font-family: var(--mono); }
+  code { font-size: .88em; color: var(--z200); background: var(--z800); border-radius: 5px; padding: 1px 6px; }
+  kbd {
+    display: inline-block; font-size: 13px; line-height: 1; color: var(--z100); padding: 6px 9px; min-width: 28px; text-align: center;
+    background: linear-gradient(#2c2c33, #222228); border: 1px solid #3a3a43; border-radius: 7px;
+    box-shadow: 0 3px 0 #121216, inset 0 1px 0 rgba(255,255,255,.07);
+  }
+
+  /* ---------- nav ---------- */
+  nav {
+    position: sticky; top: 0; z-index: 50; backdrop-filter: blur(14px) saturate(140%); -webkit-backdrop-filter: blur(14px) saturate(140%);
+    background: rgba(11,11,14,.72); border-bottom: 1px solid rgba(42,42,49,.6);
+  }
+  nav .wrap { display: flex; align-items: center; gap: 28px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-family: var(--display); font-weight: 600; font-size: 20px; letter-spacing: -.02em; color: var(--z100); }
+  .brand em { color: var(--accent); }
+  nav .links { display: flex; gap: 26px; margin-left: auto; font-size: 15px; }
+  nav .links a { text-decoration: none; color: var(--z400); transition: color .2s; }
+  nav .links a:hover { color: var(--z100); }
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 500; font-size: 15px;
+    border-radius: 11px; padding: 11px 18px; transition: transform .2s, box-shadow .2s, background .2s; white-space: nowrap;
+  }
+  .btn.primary { background: var(--accent); color: #101014; box-shadow: 0 10px 30px rgba(122,162,247,.25), inset 0 1px 0 rgba(255,255,255,.4); }
+  .btn.primary:hover { transform: translateY(-2px); box-shadow: 0 16px 40px rgba(122,162,247,.35), inset 0 1px 0 rgba(255,255,255,.4); }
+  .btn.ghost { color: var(--z200); border: 1px solid var(--edge); background: rgba(29,29,34,.6); }
+  .btn.ghost:hover { border-color: var(--z600); background: var(--panelalt); }
+  nav .btn { padding: 8px 14px; font-size: 14px; }
+
+  /* ---------- hero ---------- */
+  .hero { position: relative; padding: clamp(28px, 4vw, 56px) 0 clamp(44px, 5vw, 76px); }
+  .hero::before {
+    content: ""; position: absolute; inset: -120px 0 0; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(700px 480px at 78% 35%, rgba(122,162,247,.17), transparent 70%),
+      radial-gradient(600px 400px at 5% 85%, rgba(253,240,166,.05), transparent 70%);
+  }
+  .hero::after {
+    content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: .55;
+    background-image: radial-gradient(rgba(255,255,255,.07) 1px, transparent 1px); background-size: 30px 30px;
+    mask-image: radial-gradient(ellipse at 70% 40%, #000 20%, transparent 70%);
+  }
+  .hero .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: clamp(32px, 4.5vw, 64px); align-items: center; }
+  .hero h1 { font-family: var(--display); font-weight: 600; color: var(--z100); font-size: clamp(40px, 4.7vw, 66px); line-height: 1.04; letter-spacing: -.035em; margin: 16px 0 20px; }
+  .hero .lede { font-size: clamp(17px, 1.6vw, 20px); color: var(--z400); max-width: 30em; margin: 0 0 28px; }
+  .hero .ctas { display: flex; flex-wrap: wrap; gap: 12px; }
+  .hero .meta { margin-top: 20px; font-size: 14px; color: var(--z500); display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; }
+  .hero .meta kbd { margin: 0 1px; }
+
+  /* the working panel mock */
+  .stagebox { position: relative; }
+  .try { position: absolute; top: -34px; left: 6px; font-family: var(--mono); font-size: 12.5px; color: var(--z500); display: flex; align-items: center; gap: 8px; }
+  .try::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 10px #4ade80; }
+  .panel {
+    position: relative; background: var(--panel); border: 1px solid var(--edge); border-radius: 16px; overflow: hidden;
+    box-shadow: 0 50px 120px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.02); height: 520px; display: flex; flex-direction: column;
+  }
+  .panel .grip { height: 18px; display: grid; place-items: center; flex: none; }
+  .panel .grip i { width: 40px; height: 4px; border-radius: 4px; background: var(--z700); }
+  .psearch { flex: none; height: 50px; display: flex; align-items: center; gap: 11px; padding: 0 18px; border-bottom: 1px solid var(--edge); }
+  .psearch input {
+    flex: 1; min-width: 0; background: none; border: 0; outline: 0; color: var(--z100); font: 16px var(--sans); caret-color: var(--accent);
+  }
+  .psearch input::placeholder { color: var(--z500); }
+  .psearch .n { color: var(--z500); font-size: 14px; }
+  .pchips { flex: none; display: flex; gap: 7px; padding: 10px 14px; border-bottom: 1px solid var(--edge); overflow-x: auto; scrollbar-width: none; }
+  .pchips::-webkit-scrollbar { display: none; }
+  .pchips button {
+    font: 13.5px var(--sans); color: var(--z300); background: none; border: 1px solid var(--z700); border-radius: 999px; padding: 4px 12px; cursor: pointer; white-space: nowrap;
+  }
+  .pchips button.on { color: var(--accent); border-color: rgba(122,162,247,.6); background: var(--accent-dim); }
+  .pbody { flex: 1; display: flex; min-height: 0; }
+  .plist { width: 42%; min-width: 0; border-right: 1px solid var(--edge); overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--z700) transparent; }
+  .prow { display: flex; align-items: center; gap: 11px; height: 58px; padding: 0 12px 0 14px; cursor: pointer; border-left: 3px solid transparent; position: relative; }
+  .prow:hover { background: rgba(255,255,255,.025); }
+  .prow.sel { background: rgba(122,162,247,.1); border-left-color: var(--accent); }
+  .pic { flex: none; width: 34px; height: 34px; border: 1px solid var(--z700); border-radius: 7px; display: grid; place-items: center; font-size: 9.5px; color: var(--z500); letter-spacing: .02em; text-transform: uppercase; }
+  .pic.cred { color: var(--accent); border-color: rgba(122,162,247,.5); }
+  .pt { min-width: 0; flex: 1; }
+  .pt b { display: block; font-weight: 400; font-size: 14.5px; color: var(--z100); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pt small { font-size: 12px; color: var(--z500); }
+  .tackbtn {
+    flex: none; width: 28px; height: 28px; border-radius: 7px; border: 1px solid transparent; background: none; color: var(--z500); cursor: pointer;
+    display: grid; place-items: center; opacity: 0; transition: opacity .15s;
+  }
+  .prow:hover .tackbtn, .prow.sel .tackbtn { opacity: 1; }
+  .tackbtn:hover { color: var(--accent); border-color: rgba(122,162,247,.4); background: var(--accent-dim); }
+  .pempty { padding: 26px 18px; color: var(--z500); font-size: 14px; }
+  .pprev { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .pph { flex: none; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--edge); font-size: 14px; color: var(--z100); white-space: nowrap; overflow: hidden; }
+  .tag { font-size: 10.5px; letter-spacing: .06em; color: var(--z500); background: var(--z800); border-radius: 5px; padding: 2px 7px; text-transform: uppercase; }
+  .ppb { flex: 1; padding: 16px; font-family: var(--mono); font-size: 13.5px; line-height: 1.7; color: var(--z200); white-space: pre-wrap; word-break: break-word; overflow: auto; }
+  .ppb .k { color: #c792ea; } .ppb .s { color: #c3e88d; } .ppb .f { color: #82aaff; } .ppb .c { color: var(--z500); }
+  .pfoot { flex: none; height: 36px; border-top: 1px solid var(--edge); display: flex; gap: 16px; align-items: center; padding: 0 14px; font-size: 12px; color: var(--z500); white-space: nowrap; overflow: hidden; }
+  .pfoot .r { margin-left: auto; }
+  .ptoast {
+    position: absolute; left: 50%; bottom: 50px; transform: translate(-50%, 12px); opacity: 0; pointer-events: none; white-space: nowrap;
+    background: var(--accent); color: #101014; font-weight: 500; font-size: 13.5px; padding: 8px 14px; border-radius: 9px; transition: opacity .25s, transform .3s cubic-bezier(.34,1.56,.64,1);
+  }
+  .ptoast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  /* stickies -- real ones float over the page, like the app's */
+  .sticky {
+    position: fixed; z-index: 60; width: 250px; border-radius: 11px; overflow: hidden; color: #18181b; touch-action: none;
+    box-shadow: 0 24px 50px rgba(0,0,0,.5), 0 3px 10px rgba(0,0,0,.3); animation: drop .55s cubic-bezier(.34,1.56,.64,1) both;
+  }
+  .sticky.inhero { position: absolute; z-index: 3; }
+  .sticky .st { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 12px; font-size: 12.5px; color: #46464e; cursor: grab; user-select: none; }
+  .sticky .st span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sticky .st button { border: 0; background: none; color: #70707a; width: 24px; height: 24px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .sticky .st button:hover { background: rgba(0,0,0,.07); color: #18181b; }
+  .sticky.drag .st { cursor: grabbing; }
+  .sticky .sb { padding: 4px 14px 14px; font-family: var(--mono); font-size: 12.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow: hidden; }
+  .sticky .sb.note { font-family: var(--sans); font-size: 15px; }
+  .sticky .sw { margin: 4px 12px 12px; height: 90px; border-radius: 8px; }
+  @keyframes drop { from { opacity: 0; transform: translateY(-30px) rotate(var(--r, 0deg)) scale(1.05); } to { opacity: 1; transform: rotate(var(--r, 0deg)); } }
+
+  /* ---------- sections ---------- */
+  section { padding: clamp(60px, 8vw, 116px) 0; position: relative; }
+  .sh { max-width: 820px; margin-bottom: clamp(36px, 5vw, 64px); }
+  .sh h2 { font-family: var(--display); font-weight: 600; color: var(--z100); font-size: clamp(34px, 4.3vw, 58px); line-height: 1.06; letter-spacing: -.033em; margin: 16px 0 18px; }
+  .sh p { font-size: 18px; color: var(--z400); margin: 0; max-width: 40em; }
+  .rule { border: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--edge) 20%, var(--edge) 80%, transparent); margin: 0; }
+
+  /* film */
+  .film { position: relative; border-radius: 20px; overflow: hidden; border: 1px solid var(--edge); background: #000; box-shadow: 0 60px 140px rgba(0,0,0,.6); aspect-ratio: 16 / 9; }
+  .film video { display: block; width: 100%; height: 100%; }
+  .film-cap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 16px; font-size: 14px; color: var(--z500); }
+
+  /* bento */
+  .bento { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; }
+  .card {
+    position: relative; grid-column: span 2; border-radius: 20px; padding: 28px; overflow: hidden;
+    background: linear-gradient(180deg, #16161b, #111115); border: 1px solid var(--edge);
+    transition: border-color .3s, transform .3s;
+  }
+  .card:hover { border-color: #3a3a44; }
+  .card.w3 { grid-column: span 3; } .card.w4 { grid-column: span 4; }
+  .card h3 { font-family: var(--display); font-weight: 600; color: var(--z100); font-size: 23px; line-height: 1.2; margin: 0 0 10px; letter-spacing: -.02em; }
+  .card p { margin: 0; color: var(--z400); font-size: 15.5px; }
+  .card .vis { height: 170px; margin: -4px 0 24px; border-radius: 12px; background: #0d0d11; border: 1px solid #1f1f26; position: relative; overflow: hidden; }
+
+  .typer { position: absolute; left: 18px; right: 18px; top: 50%; transform: translateY(-50%); height: 54px; border-radius: 10px; border: 1px solid var(--z700); display: flex; align-items: center; gap: 10px; padding: 0 16px; background: var(--panel); }
+  .typer .q { font-family: var(--mono); font-size: 15px; color: var(--z100); white-space: pre; overflow: hidden; }
+  .typer .q .op { color: var(--accent); }
+  .typer .cur { width: 2px; height: 22px; background: var(--accent); animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .json { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; padding: 0 18px; font-family: var(--mono); font-size: 12.5px; line-height: 1.6; }
+  .json pre { margin: 0; color: var(--z300); white-space: pre-wrap; word-break: break-all; }
+  .json .arrow { color: var(--accent); font-size: 20px; }
+  .json .s { color: #c3e88d; } .json .k { color: #c792ea; }
+
+  .minis { position: absolute; inset: 0; }
+  .minis div { position: absolute; border-radius: 8px; box-shadow: 0 12px 26px rgba(0,0,0,.5); font-size: 12px; padding: 26px 12px 10px; color: #18181b; transition: transform .5s cubic-bezier(.34,1.56,.64,1); }
+  .minis div::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 18px; background: rgba(0,0,0,.06); }
+  .card:hover .minis div:nth-child(1) { transform: rotate(-6deg) translate(-8px, -6px); }
+  .card:hover .minis div:nth-child(2) { transform: rotate(5deg) translate(6px, -10px); }
+  .card:hover .minis div:nth-child(3) { transform: rotate(-2deg) translate(4px, 6px); }
+
+  .bigstat { display: flex; gap: 34px; align-items: flex-end; height: 100%; padding: 20px 22px; }
+  .bigstat b { display: block; font-family: var(--display); font-weight: 600; font-size: 54px; line-height: 1; letter-spacing: -.04em; color: var(--z100); }
+  .bigstat b small { font-size: 24px; color: var(--accent); margin-left: 3px; }
+  .bigstat span { font-family: var(--mono); font-size: 12px; color: var(--z500); }
+
+  .shield { position: absolute; inset: 0; display: grid; place-items: center; }
+  .shield .rowx { display: flex; flex-direction: column; gap: 8px; width: 80%; }
+  .shield .rowx div { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 12.5px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--z800); color: var(--z400); }
+  .shield .rowx .skip { color: var(--z600); text-decoration: line-through; }
+
+  .fold { position: absolute; inset: 0; padding: 18px; display: flex; flex-wrap: wrap; gap: 8px; align-content: center; justify-content: center; }
+  .fold span { font-size: 13px; border-radius: 999px; padding: 6px 13px; border: 1px solid var(--z700); color: var(--z300); display: inline-flex; gap: 8px; align-items: center; }
+  .fold span.on { color: var(--accent); border-color: rgba(122,162,247,.6); background: var(--accent-dim); }
+
+  /* privacy */
+  .priv { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--edge); }
+  .priv > div { padding: 36px 32px 10px 0; }
+  .priv > div + div { padding-left: 32px; border-left: 1px solid var(--edge); }
+  .priv .num { font-family: var(--mono); font-size: 13px; color: var(--z600); }
+  .priv h3 { font-family: var(--display); font-weight: 600; font-size: 27px; line-height: 1.15; color: var(--z100); margin: 14px 0 14px; letter-spacing: -.025em; }
+  .priv p { margin: 0; color: var(--z400); font-size: 16px; }
+  .privvis { height: 130px; margin-bottom: 28px; position: relative; }
+
+  /* keys */
+  .keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 0 40px; }
+  .keys div { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 0; border-bottom: 1px solid #1d1d23; font-size: 15.5px; color: var(--z300); }
+  .keys div span:last-child { display: flex; gap: 5px; flex: none; }
+
+  /* proof */
+  .proof { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(30px, 6vw, 90px); align-items: end; }
+  .proof .figs { display: flex; gap: clamp(26px, 5vw, 60px); flex-wrap: wrap; }
+  .proof .figs b { display: block; font-family: var(--display); font-weight: 600; font-size: clamp(64px, 8vw, 108px); line-height: .9; color: var(--z100); letter-spacing: -.05em; }
+  .proof .figs span { font-family: var(--mono); font-size: 13px; color: var(--z500); display: block; margin-top: 14px; max-width: 16em; }
+  .proof ul { margin: 0; padding: 0; list-style: none; }
+  .proof li { padding: 13px 0 13px 30px; border-bottom: 1px solid #1d1d23; position: relative; color: var(--z300); font-size: 15.5px; }
+  .proof li::before { content: "✓"; position: absolute; left: 2px; color: #4ade80; font-family: var(--mono); }
+
+  /* install */
+  .install { border-radius: 26px; padding: clamp(32px, 6vw, 80px); position: relative; overflow: hidden; border: 1px solid var(--edge);
+    background: radial-gradient(600px 300px at 85% 0%, rgba(122,162,247,.2), transparent 70%), linear-gradient(180deg, #15151a, #0f0f13); }
+  .install h2 { font-family: var(--display); font-weight: 600; color: var(--z100); font-size: clamp(36px, 5vw, 70px); line-height: 1.02; margin: 0 0 30px; letter-spacing: -.035em; }
+  .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin: 46px 0 0; counter-reset: s; }
+  .steps div { counter-increment: s; border-top: 1px solid var(--edge); padding-top: 18px; color: var(--z400); font-size: 15.5px; }
+  .steps div::before { content: "0" counter(s); display: block; font-family: var(--mono); font-size: 13px; color: var(--accent); margin-bottom: 8px; }
+  .steps b { color: var(--z100); font-weight: 500; }
+
+  footer { padding: 50px 0 60px; color: var(--z500); font-size: 14px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 14px 30px; align-items: center; }
+  footer .r { margin-left: auto; display: flex; gap: 22px; }
+  footer a { text-decoration: none; } footer a:hover { color: var(--z200); }
+
+  /* reveal */
+  .rv { opacity: 0; transform: translateY(28px); transition: opacity .9s cubic-bezier(.22,1,.36,1), transform .9s cubic-bezier(.22,1,.36,1); }
+  .rv.in { opacity: 1; transform: none; }
+  .hero .rv:nth-child(2) { transition-delay: .08s; } .hero .rv:nth-child(3) { transition-delay: .16s; } .hero .rv:nth-child(4) { transition-delay: .24s; } .hero .rv:nth-child(5) { transition-delay: .32s; }
+  @media (prefers-reduced-motion: reduce) {
+    .rv { opacity: 1; transform: none; transition: none; }
+    .sticky { animation: none; }
+    html { scroll-behavior: auto; }
+  }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 1000px) {
+    .hero .wrap { grid-template-columns: minmax(0, 1fr); }
+    .stagebox { margin-top: 24px; }
+    .try { position: static; margin: 0 0 12px 4px; }
+    .card, .card.w3, .card.w4 { grid-column: span 6; }
+    .priv { grid-template-columns: minmax(0, 1fr); }
+    .priv > div + div { padding-left: 0; border-left: 0; border-top: 1px solid var(--edge); }
+    .proof { grid-template-columns: minmax(0, 1fr); }
+    .steps { grid-template-columns: minmax(0, 1fr); }
+    .sticky.inhero { display: none; }
+  }
+  @media (max-width: 640px) {
+    nav .links { display: none; }
+    nav .btn { margin-left: auto; }
+    .panel { height: 470px; }
+    .plist { width: 100%; border-right: 0; }
+    .pprev { display: none; }
+    .pfoot span:not(:first-child):not(.r) { display: none; }
+    .tackbtn { opacity: 1; }
+    .film { border-radius: 12px; }
+    .bigstat { gap: 22px; } .bigstat b { font-size: 56px; }
+    footer .r { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#top">
+      <svg width="28" height="28" viewBox="0 0 128 128" aria-hidden="true"><circle cx="64" cy="64" r="62" fill="#18181b" stroke="#2a2a31" stroke-width="3"/><path d="M28 30h20v-8h32v8h20v70H28z" fill="#7aa2f7"/><rect x="40" y="42" width="48" height="46" fill="#18181b"/></svg>
+      <span>Clip<em>tack</em></span>
+    </a>
+    <div class="links">
+      <a href="#film">Film</a><a href="#features">Features</a><a href="#privacy">Privacy</a><a href="#keys">Shortcuts</a>
+      <a href="https://github.com/vishnuvnathan/cliptack">GitHub</a>
+    </div>
+    <a class="btn primary" href="https://github.com/vishnuvnathan/cliptack/releases/latest/download/Cliptack-windows-x64.msi">Download</a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <div>
+      <div class="kicker rv">Clipboard history for Windows</div>
+      <h1 class="rv">Everything you copy, <em>tacked</em> where you need it.</h1>
+      <p class="lede rv">Cliptack keeps your clipboard history on your machine and nowhere else. Press one shortcut to find anything you've copied, reshape it on the way out, or pin it to your screen.</p>
+      <div class="ctas rv">
+        <a class="btn primary" href="https://github.com/vishnuvnathan/cliptack/releases/latest/download/Cliptack-windows-x64.msi">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.5 10.5 4.4v7.1H3zm0 13L10.5 19.6v-7H3zM11.5 4.3 21 3v8.5h-9.5zm0 15.4L21 21v-8.4h-9.5z"/></svg>
+          Download for Windows
+        </a>
+        <a class="btn ghost" href="https://github.com/vishnuvnathan/cliptack">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.56-.29-5.25-1.28-5.25-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.7 5.39-5.27 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5"/></svg>
+          View the source
+        </a>
+      </div>
+      <div class="meta rv"><span>Free · MIT licence</span><span>Windows 10 &amp; 11 · 64-bit .msi</span><a href="https://github.com/vishnuvnathan/cliptack/releases" style="color:var(--z400)">All releases</a><span>Open it with <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd></span></div>
+    </div>
+
+    <div class="stagebox rv">
+      <div class="try">Live demo — type, arrow, press Enter, or tack a clip</div>
+      <div class="panel" id="panel">
+        <div class="grip"><i></i></div>
+        <div class="psearch">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#71717a" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="q" type="text" autocomplete="off" spellcheck="false" placeholder="Search, or try  app:Code  type:code  is:pinned" aria-label="Search the demo history" />
+          <span class="n" id="n">0</span>
+        </div>
+        <div class="pchips" id="chips"></div>
+        <div class="pbody">
+          <div class="plist" id="list" role="listbox" aria-label="Demo clips"></div>
+          <div class="pprev"><div class="pph" id="ph"></div><div class="ppb" id="pb"></div></div>
+        </div>
+        <div class="pfoot"><span>↵ paste</span><span>Ctrl+↵ copy</span><span>⤢ tack to screen</span><span class="r">all demo data</span></div>
+        <div class="ptoast" id="toast"></div>
+      </div>
+      <div class="sticky inhero" style="--r:-3deg;background:#fdf0a6;right:-34px;bottom:-62px;width:220px">
+        <div class="st" style="background:#f7e587"><span>Note</span><button aria-label="Close" data-close>✕</button></div>
+        <div class="sb note">Drag me.<br>Then tack a clip from the list — it floats over this page like a real sticky.</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<hr class="rule" />
+
+<section id="film">
+  <div class="wrap">
+    <div class="sh rv">
+      <div class="kicker">The film</div>
+      <h2>See it in <em>thirty-four</em> seconds.</h2>
+    </div>
+    <div class="film rv">
+      <video src="media/cliptack-promo.mp4" poster="media/cliptack-promo-poster.jpg" controls playsinline muted loop preload="metadata"></video>
+    </div>
+    <div class="film-cap rv"><span>Motion graphics built from the app's own colours and layout.</span><span>All clips shown are demo data.</span></div>
+  </div>
+</section>
+
+<section id="features" style="padding-top:0">
+  <div class="wrap">
+    <div class="sh rv">
+      <div class="kicker">What it does</div>
+      <h2>A clipboard that <em>keeps up</em> with you.</h2>
+      <p>Windows remembers the last thing you copied. Cliptack remembers all of it, and makes it fast to get back from the keyboard.</p>
+    </div>
+    <div class="bento">
+      <div class="card w4 rv">
+        <div class="vis"><div class="typer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#71717a" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span class="q" id="typer"></span><span class="cur"></span></div></div>
+        <h3>Search like a developer</h3>
+        <p>Prefix search over everything, plus operators when you want them: <code>app:Code</code> <code>type:code</code> <code>is:pinned</code> <code>folder:work</code> <code>sort:used</code> <code>"exact phrase"</code>. A pasted URL is never mistaken for an operator.</p>
+      </div>
+      <div class="card w2 rv">
+        <div class="vis"><div class="bigstat"><div><b>0.02<small>%</small></b><span>CPU, idle</span></div><div><b>31<small>MB</small></b><span>memory, idle</span></div></div></div>
+        <h3>Quiet</h3>
+        <p>Measured, not estimated. It sits in the tray and stays out of the way.</p>
+      </div>
+      <div class="card w3 rv">
+        <div class="vis"><div class="json"><pre>{<span class="s">"name"</span>:<span class="s">"cliptack"</span>,<span class="s">"ok"</span>:<span class="k">true</span>}</pre><span class="arrow">→</span><pre>{
+  <span class="s">"name"</span>: <span class="s">"cliptack"</span>,
+  <span class="s">"ok"</span>: <span class="k">true</span>
+}</pre></div></div>
+        <h3>Paste as</h3>
+        <p><kbd>Ctrl</kbd>+<kbd>T</kbd> prettifies or minifies JSON, decodes base64, URL-encodes, and changes case. Only the paste changes; the history keeps what you actually copied, key order included.</p>
+      </div>
+      <div class="card w3 rv">
+        <div class="vis"><div class="minis">
+          <div style="left:9%;top:24px;width:34%;height:110px;background:#fdf0a6">git push origin main</div>
+          <div style="left:36%;top:44px;width:30%;height:104px;background:#fcd6e4">☐ call back at 4</div>
+          <div style="left:62%;top:20px;width:28%;height:112px;background:#cae1fc"><span style="display:block;height:52px;border-radius:6px;background:#7aa2f7"></span></div>
+        </div></div>
+        <h3>Tack it to your screen</h3>
+        <p><kbd>Ctrl</kbd>+<kbd>O</kbd> pops a clip — a snippet, an image, a colour — into a small card that stays on top. Notes stay editable in the card, and cards come back after a restart.</p>
+      </div>
+      <div class="card w2 rv">
+        <div class="vis"><div class="fold"><span class="on">All</span><span>Work <kbd>Alt+1</kbd></span><span>Snippets <kbd>Alt+2</kbd></span><span>Notes</span><span>Creds</span><span>Pinned</span></div></div>
+        <h3>Notes, folders, pins</h3>
+        <p>Write notes in Markdown, file anything into folders, and pin what you keep reaching for.</p>
+      </div>
+      <div class="card w2 rv">
+        <div class="vis"><div class="shield"><div class="rowx"><div><span>meeting notes.txt</span><span>saved</span></div><div class="skip"><span>from a password manager</span><span>skipped</span></div><div><span>#7aa2f7</span><span>saved</span></div></div></div></div>
+        <h3>Password-manager copies are skipped</h3>
+        <p>Anything a password manager marks private is never recorded.</p>
+      </div>
+      <div class="card w2 rv">
+        <div class="vis"><div class="fold"><span>Dark</span><span>Light</span><span class="on">System</span><span style="background:#7aa2f7;border-color:#7aa2f7;width:28px;height:28px;padding:0"></span><span style="background:#f472b6;border-color:#f472b6;width:28px;height:28px;padding:0"></span><span style="background:#4ade80;border-color:#4ade80;width:28px;height:28px;padding:0"></span></div></div>
+        <h3>Yours to tune</h3>
+        <p>Theme, accent colour, the open shortcut, and whether it saves everything or only what you choose.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="rule" />
+
+<section id="privacy">
+  <div class="wrap">
+    <div class="sh rv">
+      <div class="kicker">Private by design</div>
+      <h2>Your clipboard sees <em>everything.</em> So it stays on your machine.</h2>
+      <p>Passwords, addresses, half-written messages: a clipboard history is a record of everything you've handled. Cliptack treats it that way.</p>
+    </div>
+    <div class="priv">
+      <div class="rv">
+        <div class="privvis"><svg width="100%" height="130" viewBox="0 0 330 130" fill="none" aria-hidden="true"><rect x="10" y="22" width="110" height="72" rx="8" stroke="#a1a1aa" stroke-width="2.5"/><path d="M0 106h130" stroke="#a1a1aa" stroke-width="2.5" stroke-linecap="round"/><path d="M140 62h100" stroke="#52525b" stroke-width="2.5" stroke-dasharray="5 8"/><path d="M262 82a22 22 0 0 1 3-44 30 30 0 0 1 57 10 18 18 0 0 1-5 34z" stroke="#52525b" stroke-width="2.5"/><circle cx="190" cy="62" r="20" fill="#0b0b0e" stroke="#f87171" stroke-width="2.5"/><path d="m182 54 16 16m0-16-16 16" stroke="#f87171" stroke-width="2.5" stroke-linecap="round"/></svg></div>
+        <span class="num">01</span>
+        <h3>Nothing leaves your machine.</h3>
+        <p>The code makes no network calls, and no dependency that opens a socket is included. No account, no sync, no telemetry.</p>
+      </div>
+      <div class="rv">
+        <div class="privvis" style="display:flex;flex-direction:column;gap:10px;justify-content:center">
+          <div style="display:flex;justify-content:space-between;border:1px solid #3f3f46;border-radius:9px;padding:10px 14px;font-size:14px;color:#a1a1aa">Password <span class="mono" style="color:#f4f4f5;letter-spacing:.2em">••••••••</span><span class="mono" style="color:#4ade80;font-size:12.5px">✓ pasted</span></div>
+          <div style="display:flex;justify-content:space-between;border:1px solid #3f3f46;border-radius:9px;padding:10px 14px;font-size:14px;color:#a1a1aa">Message <span></span><span class="mono" style="color:#f87171;font-size:12.5px">✕ refused</span></div>
+        </div>
+        <span class="num">02</span>
+        <h3>Passwords paste only into password fields.</h3>
+        <p>Saved credentials are encrypted with Windows DPAPI. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd> pastes one only after Windows UI Automation confirms the focused box is a password field. Anything else, and nothing is sent.</p>
+      </div>
+      <div class="rv">
+        <div class="privvis"><div style="position:absolute;inset:0;border:1.5px solid rgba(248,113,113,.5);border-radius:10px;background:repeating-linear-gradient(90deg,#141418 0 40px,#121215 40px 80px)"><span class="mono" style="position:absolute;left:12px;top:8px;font-size:11.5px;color:#f87171">● You are presenting</span><div style="position:absolute;left:30%;right:30%;top:36px;bottom:18px;background:#000;border-radius:6px;display:grid;place-items:center" class="mono"><span style="font-size:11px;color:#52525b">not captured</span></div></div></div>
+        <span class="num">03</span>
+        <h3>Hidden from screen shares.</h3>
+        <p>On by default, the panel and every sticky are excluded from screen capture, so your history never turns up in a meeting.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="rule" />
+
+<section id="keys">
+  <div class="wrap">
+    <div class="sh rv">
+      <div class="kicker">Keyboard first</div>
+      <h2>Never reach for the <em>mouse.</em></h2>
+      <p>Every action has a key. The open shortcut can be rebound in Settings.</p>
+    </div>
+    <div class="keys rv">
+      <div><span>Show or hide the panel, from anywhere</span><span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>V</kbd></span></div>
+      <div><span>Paste into the window you came from</span><span><kbd>Enter</kbd></span></div>
+      <div><span>Copy without pasting</span><span><kbd>Ctrl</kbd><kbd>Enter</kbd></span></div>
+      <div><span>Paste as…</span><span><kbd>Ctrl</kbd><kbd>T</kbd></span></div>
+      <div><span>Tack to the screen</span><span><kbd>Ctrl</kbd><kbd>O</kbd></span></div>
+      <div><span>New note, straight onto the screen</span><span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd></span></div>
+      <div><span>Pin or unpin</span><span><kbd>Ctrl</kbd><kbd>P</kbd></span></div>
+      <div><span>Move to a folder</span><span><kbd>Ctrl</kbd><kbd>M</kbd></span></div>
+      <div><span>Filter by folder</span><span><kbd>Alt</kbd><kbd>1–9</kbd></span></div>
+      <div><span>Delete, then undo</span><span><kbd>Ctrl</kbd><kbd>⌫</kbd> <kbd>Ctrl</kbd><kbd>Z</kbd></span></div>
+      <div><span>New credential</span><span><kbd>Ctrl</kbd><kbd>K</kbd></span></div>
+      <div><span>Paste a password, guarded</span><span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Enter</kbd></span></div>
+    </div>
+  </div>
+</section>
+
+<hr class="rule" />
+
+<section id="proof">
+  <div class="wrap proof">
+    <div class="rv">
+      <div class="kicker">Not taken on trust</div>
+      <h2 class="serif" style="font-size:clamp(34px,4.3vw,58px);line-height:1.06;letter-spacing:-.033em;margin:16px 0 40px">Checked by <em>running</em> it.</h2>
+      <div class="figs">
+        <div><b>117</b><span>automated tests: classifier, query parser, transforms, crypto, migrations</span></div>
+        <div><b>~30</b><span>behaviours verified by driving the real app on Windows 11</span></div>
+      </div>
+    </div>
+    <ul class="rv">
+      <li>A searched clip pasted into the window you came from, not the newest one</li>
+      <li>The panel and every sticky are excluded from screen capture (<code>WDA_EXCLUDEFROMCAPTURE</code>)</li>
+      <li>A clip a password manager marked private was never recorded</li>
+      <li>Saved passwords sit DPAPI-encrypted in the database, with no plaintext</li>
+      <li>Prettify kept JSON key order instead of sorting it</li>
+      <li>A moved sticky came back in place after the process was killed</li>
+      <li>Idle: 0.02% CPU over 30 seconds, 31 MB resident</li>
+    </ul>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="install rv">
+      <div class="kicker">Get it</div>
+      <h2 style="margin-top:16px">Free. Open source. <em>Yours.</em></h2>
+      <div class="ctas" style="display:flex;flex-wrap:wrap;gap:12px">
+        <a class="btn primary" href="https://github.com/vishnuvnathan/cliptack/releases/latest/download/Cliptack-windows-x64.msi">Download for Windows</a>
+        <a class="btn ghost" href="https://github.com/vishnuvnathan/cliptack/releases">All releases</a>
+        <a class="btn ghost" href="https://github.com/vishnuvnathan/cliptack#building">Build it yourself</a>
+      </div>
+      <div class="steps">
+        <div><b>Run the installer.</b> It isn't code-signed yet, so SmartScreen may warn you: choose <b>More info → Run anyway</b>.</div>
+        <div><b>Copy things as usual.</b> Cliptack lives in the tray and keeps what you copy.</div>
+        <div><b>Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd></b> anywhere to get it all back.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>Cliptack · MIT licence · Windows only for now — the macOS and Linux code is written but has never been compiled there.</span>
+    <span class="r"><a href="https://github.com/vishnuvnathan/cliptack">GitHub</a><a href="https://github.com/vishnuvnathan/cliptack/issues">Issues</a><a href="https://github.com/vishnuvnathan/cliptack/blob/main/LICENSE">Licence</a></span>
+  </div>
+</footer>
+
+<script>
+/* ---------- the live panel ---------- */
+const CLIPS = [
+  { title: "GitHub — demo account", type: "cred", app: "chrome.exe", age: "1d", pinned: true, body: "username   demo\npassword   ••••••••••••\n\nCredentials can't be tacked to the screen,\nand paste only into password fields." },
+  { title: "Release notes before the 3pm sync", type: "text", app: "slack.exe", age: "2h", pinned: true, body: "Pick up the release notes from Sam before the 3pm sync." },
+  { title: "Launch checklist", type: "note", app: "", age: "1d", body: "# Launch checklist\n☑ Rename to Cliptack\n☑ 117 tests green\n☐ Publish the release" },
+  { title: "https://github.com/vishnuvnathan/cliptack", type: "link", app: "chrome.exe", age: "1d", body: "https://github.com/vishnuvnathan/cliptack" },
+  { title: "pub fn classify(raw: &str) -> ContentType", type: "code", app: "Code.exe", age: "1d",
+    html: '<span class="k">pub fn</span> <span class="f">classify</span>(raw: &amp;<span class="k">str</span>) -&gt; ContentType {\n    <span class="k">let</span> t = raw.<span class="f">trim</span>();\n    <span class="k">if</span> <span class="f">looks_like_url</span>(t) { <span class="k">return</span> ContentType::Link; }\n    ContentType::Text\n}' },
+  { title: "def greet(name: str) -> str:", type: "code", app: "Code.exe", age: "2d",
+    html: '<span class="k">def</span> <span class="f">greet</span>(name: <span class="k">str</span>) -&gt; <span class="k">str</span>:\n    <span class="c"># used 14 times this week</span>\n    <span class="k">return</span> <span class="s">f"Hello, {name}!"</span>' },
+  { title: '{"name":"cliptack","version":"0.1.0"}', type: "json", app: "Code.exe", age: "2d", body: '{\n  "name": "cliptack",\n  "version": "0.1.0"\n}' },
+  { title: "#7aa2f7", type: "color", app: "Figma.exe", age: "3d", color: "#7aa2f7" },
+  { title: "git push origin main", type: "code", app: "WindowsTerminal.exe", age: "4d", body: "git push origin main" },
+  { title: "hello@example.com", type: "email", app: "OUTLOOK.EXE", age: "4d", body: "hello@example.com" },
+];
+const CHIPS = [["All", ""], ["Creds", "type:cred"], ["Text", "type:text"], ["Link", "type:link"], ["Code", "type:code"], ["Code.exe", "app:Code"], ["Pinned", "is:pinned"]];
+const $ = (s) => document.querySelector(s);
+const q = $("#q"), list = $("#list");
+let shown = [], sel = 0;
+
+/** A small cut of the real parser: operators AND across kinds, plain words are prefix matches. */
+function matches(c, query) {
+  const toks = query.match(/"[^"]*"|\S+/g) || [];
+  return toks.every((tok) => {
+    const m = tok.match(/^(app|type|t|is):(.+)$/i);
+    if (m) {
+      const k = m[1].toLowerCase(), v = m[2].toLowerCase();
+      if (k === "app") return c.app.toLowerCase().startsWith(v);
+      if (k === "is") return v === "pinned" ? !!c.pinned : v === "note" ? c.type === "note" : v === "credential" ? c.type === "cred" : false;
+      return v === "code" ? ["code", "json"].includes(c.type) : c.type.startsWith(v);
+    }
+    const w = tok.replace(/"/g, "").toLowerCase();
+    const hay = (c.title + " " + (c.body || "") + " " + c.app).toLowerCase();
+    return tok.startsWith('"') ? hay.includes(w) : hay.split(/[^a-z0-9#@.]+/).some((x) => x.startsWith(w)) || hay.includes(w);
+  });
+}
+const esc = (s) => s.replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch]));
+const ICON = { cred: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 9.2-9.2m-3 3 3 3m-6 0 2 2"/></svg>' };
+
+function render() {
+  shown = CLIPS.filter((c) => matches(c, q.value.trim()));
+  sel = Math.min(sel, Math.max(0, shown.length - 1));
+  $("#n").textContent = shown.length;
+  list.innerHTML = shown.length ? "" : '<div class="pempty">Nothing matches. Try <code>app:Code</code> or <code>is:pinned</code>.</div>';
+  shown.forEach((c, i) => {
+    const row = document.createElement("div");
+    row.className = "prow" + (i === sel ? " sel" : ""); row.setAttribute("role", "option");
+    const ic = c.type === "color" ? `<div class="pic" style="background:${c.color};border:0"></div>`
+      : `<div class="pic ${c.type === "cred" ? "cred" : ""}">${ICON[c.type] || c.type.slice(0, 4)}</div>`;
+    row.innerHTML = `${ic}<div class="pt"><b>${esc(c.title)}</b><small>${c.type}${c.app ? " · " + c.app : ""} · ${c.age}</small></div>` +
+      (c.type === "cred" ? "" : `<button class="tackbtn" title="Tack to screen (Ctrl+O)" aria-label="Tack to screen"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 4h6v6M20 4l-8 8M10 6H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5"/></svg></button>`);
+    row.addEventListener("click", (e) => {
+      sel = i;
+      if (e.target.closest(".tackbtn")) tack(c, e.target.closest(".tackbtn"));
+      render();
+    });
+    row.addEventListener("dblclick", () => paste(c));
+    list.appendChild(row);
+  });
+  preview();
+  [...$("#chips").children].forEach((b) => b.classList.toggle("on", b.dataset.q === q.value.trim()));
+}
+function preview() {
+  const c = shown[sel];
+  $("#ph").innerHTML = c ? `${esc(c.title)} <span class="tag">${c.type}</span>` : "";
+  const pb = $("#pb");
+  if (!c) pb.innerHTML = "";
+  else if (c.color) pb.innerHTML = `<div style="height:140px;border-radius:10px;background:${c.color}"></div>\n${c.color}`;
+  else pb.innerHTML = c.html || esc(c.body);
+  list.children[sel]?.scrollIntoView?.({ block: "nearest" });
+}
+let toastTimer;
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2000);
+}
+function paste(c) { toast(c.type === "cred" ? "Only into a password field — the guard said no" : "Pasted into the window you came from"); }
+
+CHIPS.forEach(([label, query]) => {
+  const b = document.createElement("button"); b.textContent = label; b.dataset.q = query;
+  b.addEventListener("click", () => { q.value = query; sel = 0; render(); q.focus(); });
+  $("#chips").appendChild(b);
+});
+q.addEventListener("input", () => { sel = 0; render(); });
+q.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowDown") { sel = Math.min(sel + 1, shown.length - 1); render(); e.preventDefault(); }
+  else if (e.key === "ArrowUp") { sel = Math.max(sel - 1, 0); render(); e.preventDefault(); }
+  else if (e.key === "Enter" && shown[sel]) { e.ctrlKey ? toast("Copied to the clipboard") : paste(shown[sel]); e.preventDefault(); }
+  else if (e.key.toLowerCase() === "o" && e.ctrlKey && shown[sel]) { tack(shown[sel], list.children[sel]); e.preventDefault(); }
+  else if (e.key === "Escape") { q.value = ""; render(); }
+});
+render();
+
+/* ---------- stickies on the page ---------- */
+const PAPERS = [["#fdf0a6", "#f7e587"], ["#fcd6e4", "#f7c5d7"], ["#cff0ca", "#bce6b6"], ["#cae1fc", "#b6d3f7"], ["#e2d6fc", "#d4c4f7"], ["#fedebe", "#facfa6"]];
+let paper = 0, cascade = 0;
+const MAX = 8; // the app's cap, too
+function tack(c, from) {
+  if (c.type === "cred") return toast("Credentials can't be tacked — by design");
+  const open = document.querySelectorAll(".sticky:not(.inhero)");
+  if (open.length >= MAX) return toast(`Eight stickies is the cap — close one first`);
+  const [bg, strip] = PAPERS[paper++ % PAPERS.length];
+  const el = document.createElement("div");
+  el.className = "sticky"; el.style.background = bg; el.style.setProperty("--r", (cascade % 2 ? 1.5 : -1.5) + "deg");
+  const body = c.color ? `<div class="sw" style="background:${c.color}"></div>`
+    : `<div class="sb${c.type === "note" ? " note" : ""}">${c.html ? c.html.replace(/<[^>]+>/g, "") : esc(c.body)}</div>`;
+  el.innerHTML = `<div class="st" style="background:${strip}"><span>${esc(c.title)}</span><button aria-label="Copy" data-copy>⧉</button><button aria-label="Close" data-close>✕</button></div>${body}`;
+  const r = (from || $("#panel")).getBoundingClientRect();
+  const w = Math.min(250, innerWidth - 32);
+  let x = Math.min(innerWidth - w - 16, r.right + 24 + (cascade % 4) * 30), y = Math.max(80, Math.min(innerHeight - 220, r.top - 20 + (cascade % 4) * 30));
+  if (innerWidth < 700) { x = 16 + (cascade % 4) * 14; y = innerHeight - 260 - (cascade % 4) * 18; }
+  cascade++;
+  el.style.left = x + "px"; el.style.top = y + "px"; el.style.width = w + "px";
+  document.body.appendChild(el); wire(el);
+  el.querySelector("[data-copy]").addEventListener("click", () => {
+    navigator.clipboard?.writeText(c.color || c.body || c.title).then(() => toast("Copied — from a sticky"), () => {});
+  });
+}
+function wire(el) {
+  el.querySelector("[data-close]").addEventListener("click", () => el.remove());
+  const strip = el.querySelector(".st");
+  strip.addEventListener("pointerdown", (e) => {
+    if (e.target.closest("button")) return;
+    const fixed = getComputedStyle(el).position === "fixed";
+    const box = el.getBoundingClientRect(), parent = fixed ? { left: 0, top: 0 } : el.offsetParent.getBoundingClientRect();
+    const dx = e.clientX - box.left, dy = e.clientY - box.top;
+    el.style.animation = "none"; el.style.bottom = "auto"; el.style.left = box.left - parent.left + "px"; el.style.top = box.top - parent.top + "px";
+    el.classList.add("drag"); strip.setPointerCapture(e.pointerId);
+    const move = (ev) => { el.style.left = ev.clientX - dx - parent.left + "px"; el.style.top = ev.clientY - dy - parent.top + "px"; };
+    const up = () => { el.classList.remove("drag"); strip.removeEventListener("pointermove", move); strip.removeEventListener("pointerup", up); };
+    strip.addEventListener("pointermove", move); strip.addEventListener("pointerup", up);
+  });
+}
+document.querySelectorAll(".sticky.inhero").forEach(wire);
+
+/* ---------- typing card ---------- */
+{
+  const lines = ["app:Code type:code", "is:pinned folder:work", '"release notes" sort:used', "https://example.com"];
+  const el = $("#typer"); let li = 0, n = 0, dir = 1, hold = 0;
+  const paint = (s) => (el.innerHTML = s.split(" ").map((w) => { const m = w.match(/^(app:|type:|is:|folder:|sort:)(.*)$/); return m ? `<span class="op">${m[1]}</span>${esc(m[2])}` : esc(w); }).join(" "));
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce) paint(lines[0]);
+  else setInterval(() => {
+    const s = lines[li];
+    if (hold) { hold--; return; }
+    n += dir;
+    if (n >= s.length) { dir = -1; hold = 22; }
+    if (n <= 0) { dir = 1; li = (li + 1) % lines.length; hold = 4; }
+    paint(s.slice(0, n));
+  }, 70);
+}
+
+/* ---------- reveal on scroll ---------- */
+const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { rootMargin: "0px 0px -8% 0px" });
+document.querySelectorAll(".rv").forEach((el) => io.observe(el));
+</script>
+</body>
+</html>
