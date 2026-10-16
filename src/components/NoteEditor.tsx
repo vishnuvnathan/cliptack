@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
+import { useEffect, useState } from "react";
 import { getItem } from "../lib/ipc";
 import { useCliptack } from "../store/useCliptack";
+import { RichNoteEditor } from "./LazyNoteEditor";
 
 export function NoteEditor() {
   const editingNoteId = useCliptack((s) => s.editingNoteId);
@@ -10,15 +10,12 @@ export function NoteEditor() {
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [preview, setPreview] = useState(false);
+  const [source, setSource] = useState(false);
   const [loaded, setLoaded] = useState(false);
-
-  const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (!editingNoteId) {
       setLoaded(true);
-      bodyRef.current?.focus();
       return;
     }
     let cancelled = false;
@@ -33,23 +30,20 @@ export function NoteEditor() {
     };
   }, [editingNoteId]);
 
-  useEffect(() => {
-    if (loaded && !preview) bodyRef.current?.focus();
-  }, [loaded, preview]);
-
-  // Ctrl+S saves; Escape goes back to the list without hiding the panel, so a
-  // stray Escape never costs you a half-written note.
+  // Ctrl+S saves; Ctrl+E switches to the Markdown source and back; Escape goes
+  // back to the list without hiding the panel, so a stray Escape never costs
+  // you a half-written note. Ctrl+Shift+S is strikethrough, not save.
   const onKeyDown = (e: React.KeyboardEvent) => {
     const mod = e.ctrlKey || e.metaKey;
-    if (mod && e.key.toLowerCase() === "s") {
+    if (mod && !e.shiftKey && e.key.toLowerCase() === "s") {
       e.preventDefault();
       e.stopPropagation();
       void saveNote(title, content);
     }
-    if (mod && e.key.toLowerCase() === "e") {
+    if (mod && !e.shiftKey && e.key.toLowerCase() === "e") {
       e.preventDefault();
       e.stopPropagation();
-      setPreview((p) => !p);
+      setSource((s) => !s);
     }
     if (e.key === "Escape") {
       e.preventDefault();
@@ -68,30 +62,33 @@ export function NoteEditor() {
           className="flex-1 bg-transparent text-[15px] text-zinc-100 outline-none placeholder:text-zinc-500"
         />
         <button
-          onClick={() => setPreview((p) => !p)}
-          className="rounded border border-edge px-2 py-1 text-xs text-zinc-400 hover:text-zinc-200"
+          onClick={() => setSource((s) => !s)}
+          aria-pressed={source}
+          title="Edit the Markdown source (Ctrl+E)"
+          className={[
+            "rounded border px-2 py-1 text-xs",
+            source ? "border-accent/50 text-accent" : "border-edge text-zinc-400 hover:text-zinc-200",
+          ].join(" ")}
         >
-          {preview ? "Edit" : "Preview"}
+          Markdown
         </button>
       </div>
 
-      {preview ? (
-        <div className="prose-cliptack min-h-0 flex-1 overflow-y-auto px-4 py-3 text-[13px] leading-6 text-zinc-200">
-          <ReactMarkdown>{content || "*Nothing to preview yet.*"}</ReactMarkdown>
-        </div>
-      ) : (
-        <textarea
-          ref={bodyRef}
+      {/* Mounted once the note is in, so the editor starts on the right text
+          and takes focus from the beginning. */}
+      {loaded && (
+        <RichNoteEditor
           value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="Markdown…"
-          spellCheck={false}
-          className="flex-1 resize-none bg-transparent px-4 py-3 font-mono text-[13px] leading-6 text-zinc-200 outline-none placeholder:text-zinc-600"
+          onChange={setContent}
+          source={source}
+          onSourceChange={setSource}
+          variant="panel"
+          autoFocus
         />
       )}
 
       <div className="flex items-center justify-between border-t border-edge px-4 py-2 text-[11px] text-zinc-500">
-        <span>Ctrl+S save · Ctrl+E preview · Esc back</span>
+        <span>Ctrl+S save · Ctrl+E markdown · Esc back</span>
         <button
           onClick={() => void saveNote(title, content)}
           className="rounded bg-accent/20 px-2.5 py-1 text-accent hover:bg-accent/30"

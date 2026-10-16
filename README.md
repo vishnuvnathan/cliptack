@@ -114,6 +114,21 @@ step into a dependency, set `debug = true` there and expect the space back.
 Clicking away hides the panel. Closing the window hides it too — the tray menu's
 **Quit** is the only thing that ends the process.
 
+### Writing notes
+
+Notes are edited as formatted text: bold, italic, strikethrough, inline code,
+headings, bulleted, numbered and checklists, quotes, code blocks, dividers and
+links. The panel has a toolbar; in a sticky, select text for the same buttons.
+Markdown typing works too (`## ` for a heading, `- ` for a list, `[ ] ` for a
+checkbox), as do `Ctrl+B`, `Ctrl+I` and `Ctrl+K` for a link. `Ctrl+E` switches
+to the Markdown source and back.
+
+Underneath, a note is still Markdown — that is what is searched, exported and
+pasted into plain-text fields — so there is no colour, font size or underline.
+Copying a note also puts it on the clipboard as HTML, so it pastes formatted
+into Word, Gmail and the like. A note containing something the editor cannot
+show, such as an image or raw HTML, opens as source rather than lose it.
+
 ### Appearance, shortcuts and what gets saved
 
 All in **Settings**.

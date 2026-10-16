@@ -6,6 +6,7 @@ mod commands;
 mod db;
 mod detect;
 mod legacy;
+mod note_html;
 mod paste;
 mod query;
 mod secret;

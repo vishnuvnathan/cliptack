@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
 import { ResizeGrips } from "./ResizeGrips";
+import { RichNoteEditor } from "./LazyNoteEditor";
 import {
   closeSticky,
   copyItem,
@@ -79,7 +79,7 @@ export function StickyWindow({ id }: { id: string }) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [preview, setPreview] = useState(false);
+  const [source, setSource] = useState(false);
   const [color, setColor] = useState("default");
   const [picking, setPicking] = useState(false);
 
@@ -234,7 +234,7 @@ export function StickyWindow({ id }: { id: string }) {
   const paper = paperFor(color);
 
   // Ctrl+C with nothing selected copies the whole item: the card *is* the
-  // selection. Ctrl+S and Ctrl+E mirror the panel's note editor. There is no
+  // selection. Ctrl+S and Ctrl+E (Markdown source) mirror the panel's note editor. There is no
   // Escape binding on purpose -- a sticky that closed on a stray key would be
   // gone from the screen without the user ever deciding that.
   useEffect(() => {
@@ -249,7 +249,7 @@ export function StickyWindow({ id }: { id: string }) {
         void flush();
       } else if (key === "e" && isNote) {
         e.preventDefault();
-        setPreview((p) => !p);
+        setSource((p) => !p);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -278,8 +278,8 @@ export function StickyWindow({ id }: { id: string }) {
           {missing ? "Deleted" : item?.title || "(empty)"}
         </span>
         {isNote && (
-          <StripButton title={preview ? "Edit (Ctrl+E)" : "Preview (Ctrl+E)"} onClick={() => setPreview((p) => !p)}>
-            <span className="px-0.5 text-[10px] uppercase tracking-wide">{preview ? "edit" : "view"}</span>
+          <StripButton title="Markdown source (Ctrl+E)" onClick={() => setSource((p) => !p)}>
+            <span className={`px-0.5 text-[10px] uppercase tracking-wide ${source ? "text-accent" : ""}`}>md</span>
           </StripButton>
         )}
         {editable && (
@@ -312,7 +312,7 @@ export function StickyWindow({ id }: { id: string }) {
         {missing ? (
           <p className="px-3 py-2 text-[12px] text-zinc-500">This item was deleted.</p>
         ) : item ? (
-          <Body item={item} draft={draft} preview={preview} onEdit={onEdit} />
+          <Body item={item} draft={draft} source={source} onSourceChange={setSource} onEdit={onEdit} />
         ) : null}
       </div>
 
@@ -330,30 +330,28 @@ export function StickyWindow({ id }: { id: string }) {
 function Body({
   item,
   draft,
-  preview,
+  source,
+  onSourceChange,
   onEdit,
 }: {
   item: Item;
   draft: string;
-  preview: boolean;
+  source: boolean;
+  onSourceChange: (source: boolean) => void;
   onEdit: (value: string) => void;
 }) {
   if (item.kind === "note") {
-    return preview ? (
-      <div className="prose-cliptack min-h-0 flex-1 overflow-y-auto px-3 py-2 text-[13px] leading-6 text-zinc-200">
-        <ReactMarkdown>{draft || "*Nothing here yet.*"}</ReactMarkdown>
-      </div>
-    ) : (
-      <textarea
+    return (
+      <RichNoteEditor
         value={draft}
-        onChange={(e) => onEdit(e.target.value)}
-        placeholder="Markdown…"
-        spellCheck={false}
+        onChange={onEdit}
+        source={source}
+        onSourceChange={onSourceChange}
+        variant="sticky"
         // A blank sticky is opened to be typed into, and a clip switched to a
         // note was switched to be edited. Focus inside a window the OS has not
         // activated stays inside it, so a card restored at launch steals nothing.
         autoFocus
-        className="min-h-0 flex-1 resize-none bg-transparent px-3 py-2 font-mono text-[12.5px] leading-6 text-zinc-200 outline-none placeholder:text-zinc-600"
       />
     );
   }

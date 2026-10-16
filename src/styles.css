@@ -129,6 +129,56 @@
     padding-left: 0.75em;
     color: rgb(var(--c-zinc-400));
   }
+  .prose-cliptack h3 { font-size: 1em; }
+  .prose-cliptack :is(s, del) { color: rgb(var(--c-zinc-500)); }
+  .prose-cliptack hr { border: 0; border-top: 1px solid rgb(var(--c-edge)); margin: 1em 0; }
+  .prose-cliptack table { border-collapse: collapse; margin: 0.5em 0; }
+  .prose-cliptack :is(th, td) {
+    border: 1px solid rgb(var(--c-edge));
+    padding: 0.2em 0.5em;
+    text-align: left;
+    vertical-align: top;
+  }
+  .prose-cliptack th { background: rgb(var(--c-panelalt)); font-weight: 600; }
+  .prose-cliptack :is(th, td) > p { margin: 0; }
+
+  /* Checklists. The editor writes `ul[data-type=taskList]` with a label around
+     each checkbox; the read-only preview gets GFM's `contains-task-list`. */
+  .prose-cliptack :is(ul[data-type="taskList"], ul.contains-task-list) {
+    list-style: none;
+    padding-left: 0.1em;
+  }
+  .prose-cliptack ul[data-type="taskList"] li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5em;
+  }
+  .prose-cliptack ul[data-type="taskList"] li > label { flex-shrink: 0; user-select: none; }
+  .prose-cliptack ul[data-type="taskList"] li > div { flex: 1; min-width: 0; }
+  .prose-cliptack ul[data-type="taskList"] li > div > p { margin: 0; }
+  .prose-cliptack ul[data-type="taskList"] li[data-checked="true"] > div {
+    color: rgb(var(--c-zinc-500));
+    text-decoration: line-through;
+  }
+  .prose-cliptack input[type="checkbox"] {
+    accent-color: rgb(var(--c-accent));
+    margin: 0.35em 0.4em 0 0;
+    cursor: pointer;
+  }
+  .prose-cliptack ul.contains-task-list input[type="checkbox"] { cursor: default; }
+
+  /* The editable note itself. */
+  .note-editor { min-height: 100%; outline: none; }
+  .note-editor > :first-child { margin-top: 0; }
+  .note-editor p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+    color: rgb(var(--c-zinc-600));
+  }
+  .note-editor a { cursor: text; }
+  .note-editor .selectedCell { background: rgb(var(--c-accent) / 0.12); }
 }
 
 /* Text content must stay selectable even though the chrome is not. The base

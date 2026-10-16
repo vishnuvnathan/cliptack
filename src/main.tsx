@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { preloadNoteEditor } from "./components/LazyNoteEditor";
 import { StickyHost } from "./components/StickyWindow";
 import "./styles.css";
 
@@ -17,3 +18,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     {isSticky ? <StickyHost initialId={params.get("sticky") || null} /> : <App />}
   </React.StrictMode>,
 );
+
+// The note editor is its own chunk, fetched once the window has painted and
+// gone quiet, so it is warm by the time a note opens -- including in the spare
+// sticky, which usually becomes a blank note -- without being in the way of
+// the panel's or a card's first paint.
+requestIdleCallback(preloadNoteEditor, { timeout: 2000 });

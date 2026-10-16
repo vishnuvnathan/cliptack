@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { readBlob } from "../lib/ipc";
 import { isCredential, type Item } from "../lib/types";
 import { useCliptack } from "../store/useCliptack";
@@ -87,7 +88,8 @@ function Body({ item }: { item: Item }) {
   if (item.kind === "note") {
     return (
       <div className="prose-cliptack text-[13px] leading-6 text-zinc-200">
-        <ReactMarkdown>{item.content || "*This note is empty.*"}</ReactMarkdown>
+        {/* GFM: the note editor writes checklists, strikethrough and tables. */}
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.content || "*This note is empty.*"}</ReactMarkdown>
       </div>
     );
   }

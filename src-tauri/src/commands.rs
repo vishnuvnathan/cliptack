@@ -11,6 +11,7 @@ use crate::db::model::{
 };
 use crate::db::{model::now_millis, queries};
 use crate::detect;
+use crate::note_html;
 use crate::paste::{self, PasteStatus};
 use crate::query;
 use crate::secret;
@@ -118,8 +119,9 @@ pub async fn copy_item(
     transform: Option<Transform>,
 ) -> CmdResult<()> {
     let item = load_copyable(&state, &id).await?;
+    let html = note_html(&item, transform);
     let item = apply_transform(item, transform)?;
-    write_item_to_clipboard(state.db.blob_dir.clone(), state.self_copy.clone(), item).await?;
+    write_item_to_clipboard(state.db.blob_dir.clone(), state.self_copy.clone(), item, html).await?;
     record_use(&state, &id).await;
     Ok(())
 }
@@ -138,8 +140,9 @@ pub async fn paste_item(
     transform: Option<Transform>,
 ) -> CmdResult<PasteStatus> {
     let item = load_copyable(&state, &id).await?;
+    let html = note_html(&item, transform);
     let item = apply_transform(item, transform)?;
-    write_item_to_clipboard(state.db.blob_dir.clone(), state.self_copy.clone(), item).await?;
+    write_item_to_clipboard(state.db.blob_dir.clone(), state.self_copy.clone(), item, html).await?;
     record_use(&state, &id).await;
     Ok(hide_and_paste(&app).await)
 }
@@ -156,6 +159,16 @@ fn apply_transform(mut item: Item, transform: Option<Transform>) -> CmdResult<It
     let source = item.content.unwrap_or_default();
     item.content = Some(transform::apply(t, &source).map_err(|e| format!("{}: {e}", t.label()))?);
     Ok(item)
+}
+
+/// A note also goes on the clipboard as HTML, so it pastes formatted into
+/// anything that takes rich text. Not once transformed: "paste as" output is
+/// meant to arrive exactly as shown, and it is no longer the note's Markdown.
+fn note_html(item: &Item, transform: Option<Transform>) -> Option<String> {
+    if transform.is_some() || item.kind != ItemKind::Note.as_str() {
+        return None;
+    }
+    item.content.as_deref().filter(|c| !c.trim().is_empty()).map(note_html::render)
 }
 
 /// Usage tracking is best-effort: failing to count a use must never fail the
@@ -186,6 +199,7 @@ async fn write_item_to_clipboard(
     blob_dir: PathBuf,
     guard: SelfCopyGuard,
     item: Item,
+    html: Option<String>,
 ) -> CmdResult<()> {
     // arboard touches platform clipboard APIs and blocks; keep it off the async
     // runtime's worker threads.
@@ -211,8 +225,14 @@ async fn write_item_to_clipboard(
             }
             None => {
                 let text = item.content.unwrap_or_default();
+                // The guard keys on the plain text, which is what capture reads;
+                // the HTML rides alongside it in the same clipboard write.
                 guard.expect(hash_bytes(text.as_bytes()));
-                cb.set_text(text).map_err(|e| format!("could not set text: {e}"))
+                match html {
+                    Some(html) => cb.set_html(html, Some(text)),
+                    None => cb.set_text(text),
+                }
+                .map_err(|e| format!("could not set text: {e}"))
             }
         }
     })
