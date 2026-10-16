@@ -248,22 +248,25 @@ item back on the clipboard.
   in a quick burst, where the cards before it are still being built.
 
 **Why `Ctrl+O` is instant, and when it is not.** Creating a WebView2 blocks the
-main thread for ~300-600 ms, and every IPC reply the panel is waiting on queues
-behind it -- that was the freeze. After the first sticky of a session, Cliptack
-keeps one hidden window with the frontend already loaded, built while the panel
-is hidden. Measured on the debug build: a pop-out from that spare took 4 ms with
-no main-thread stall, against ~390 ms for one built on demand. One spare covers
-one pop-out per panel visit; a burst of four still builds three on demand
-(~2 s of stalls in total). The spare costs one renderer, measured at about
-+60 MB private, and is not kept at all until stickies are first used.
+main thread for ~300-600 ms (debug build), and every IPC reply the panel is
+waiting on queues behind it -- that was the freeze. Cliptack keeps two hidden
+windows with the frontend already loaded, built a few seconds after launch and
+again whenever the panel hides -- never while it is up. A pop-out from one took
+11-19 ms with no main-thread stall. The first two pop-outs in one visit to the
+panel come from the spares; a third in the same visit is built on demand. A new
+card is raised to the top of the always-on-top windows, so it never opens
+behind the panel.
 
-**The cost is memory, and it is why there is a cap of eight.** Each sticky is
-its own WebView2 window with its own renderer process. Measured on Windows 11
-with the debug build: the app with no stickies was 205 MB private across 8
-processes (`cliptack.exe` alone ~10 MB private), and each sticky added roughly
-27-32 MB private (about 55-65 MB working set). Eight open stickies is therefore
-about +250 MB. The idle figures elsewhere in this README are for `cliptack.exe` on
-its own, which stickies barely move.
+**The cost is memory, and it is why there is a cap of eight.** Every window --
+the panel, each sticky and each spare -- shares one renderer process
+(`--process-per-site`; the pages are all the same origin, so separate renderers
+bought no isolation worth having). Measured on Windows 11 with the debug build,
+WebView2 private memory for the panel, one sticky and the two spares was
+173 MB, and each further sticky added about 14 MB; with a renderer per window
+the panel and one sticky alone were 208-229 MB, and each sticky about 20 MB. The
+trade is that a renderer crash takes the panel and every card down together.
+The idle figures elsewhere in this README are for `cliptack.exe` on its own,
+which stickies barely move.
 
 Window geometry is a fact about this machine's monitors, so the `stickies`
 table is not part of export/import. The sticky is the same bundle as the panel,

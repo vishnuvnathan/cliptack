@@ -27,7 +27,8 @@
         "skipTaskbar": true,
         "alwaysOnTop": true,
         "focus": true,
-        "shadow": true
+        "shadow": true,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --process-per-site"
       }
     ],
     "security": {

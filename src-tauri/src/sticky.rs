@@ -3,12 +3,15 @@
 //! for while the panel stays out of the way.
 //!
 //! Each sticky is a full webview, which is why there is a cap -- and why there
-//! is a spare. Creating a WebView2 blocks the main thread for ~300 ms, and
+//! are spares. Creating a WebView2 blocks the main thread for ~300-600 ms, and
 //! every IPC reply the panel is waiting on queues behind it, so a pop-out
-//! built on demand freezes the panel for that long (and a burst of four for
-//! well over a second). After the first sticky of a session, one hidden window
-//! with the frontend already loaded is kept ready, built while the panel is
-//! hidden; `Ctrl+O` then only has to hand it an item and show it.
+//! built on demand freezes the panel for that long. Instead `SPARES` hidden
+//! windows with the frontend already loaded are kept ready -- built at launch
+//! and whenever the panel is hidden, never while it is up -- and `Ctrl+O` only
+//! has to hand one an item and show it (~15 ms).
+//!
+//! Every window shares one renderer process (`BROWSER_ARGS`), so a spare costs
+//! ~14 MB rather than a renderer of its own.
 //!
 //! Because a window is created before anyone knows which item it will hold,
 //! its label (`sticky-w<n>`) cannot carry the item id. The registry below is
@@ -43,8 +46,23 @@ const ASSIGN_EVENT: &str = "sticky-assign";
 
 /// Each sticky is its own webview, and the whole app idles at ~31 MB. Eight is
 /// enough to keep a working set in view without the reference cards costing
-/// more than the app they came from. The spare does not count towards it.
+/// more than the app they came from. Spares do not count towards it.
 pub const MAX_STICKIES: usize = 8;
+
+/// Hidden windows kept ready. Two covers popping out a couple of items in one
+/// visit to the panel; a third press in the same visit builds on demand.
+const SPARES: usize = 2;
+
+/// WebView2 flags for every window in the app -- the panel too, through
+/// `additionalBrowserArgs` in tauri.conf.json, which must match exactly: all
+/// webviews share one WebView2 environment, and one created with different
+/// flags fails. The first part is what wry passes by default (setting any flags
+/// replaces it). `--process-per-site` puts every window in one renderer
+/// process: all the pages are the same origin, and a renderer per card cost
+/// ~20 MB each for no isolation worth having. The trade is that a renderer
+/// crash takes the panel and the cards down together.
+pub const BROWSER_ARGS: &str =
+    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --process-per-site";
 
 /// Paper colours a sticky can take. Matches `STICKY_PAPERS` in theme.ts, which
 /// holds the actual colours; Rust only keeps junk out of the table.
@@ -60,9 +78,13 @@ const CURSOR_OFFSET: f64 = 24.0;
 /// (Windows parks a minimised window at -32000 with a token size).
 const MIN_SANE_SIZE: u32 = 60;
 
-/// How long after the panel hides before the spare is built. The panel's own
+/// How long after the panel hides before a spare is built. The panel's own
 /// hide, and the paste that often follows it, go first.
 const SPARE_DELAY: Duration = Duration::from_millis(600);
+
+/// How long after launch before the first spares are built, so the reopened
+/// stickies and the first press of the shortcut go first.
+const WARM_UP_DELAY: Duration = Duration::from_secs(3);
 
 /// Between windows reopened at launch, so the shortcut and the panel get the
 /// main thread in between instead of after all of them.
@@ -80,12 +102,9 @@ struct Registry {
     /// second `Ctrl+O` for an item still being built finds it, and so does the
     /// cascade working out where the next card goes.
     cards: HashMap<String, Card>,
-    /// A hidden window with the frontend loaded and no item yet.
-    spare: Option<String>,
+    /// Hidden windows with the frontend loaded and no item yet.
+    spares: Vec<String>,
     spare_building: bool,
-    /// Set by the first sticky of the session. Until then no spare is kept, so
-    /// someone who never uses stickies never pays for one.
-    used: bool,
     /// Hide-all is in effect.
     hidden: bool,
     next_label: u64,
@@ -123,12 +142,11 @@ impl Registry {
         }
         let taken: Vec<(i32, i32)> = self.cards.values().map(|c| (c.geo.x, c.geo.y)).collect();
         let geo = place(&taken);
-        let (label, from_spare) = match self.spare.take() {
+        let (label, from_spare) = match self.spares.pop() {
             Some(label) => (label, true),
             None => (self.new_label(), false),
         };
         self.cards.insert(id.to_string(), Card { label: label.clone(), geo });
-        self.used = true;
         Ok(Reservation::New { label, geo, from_spare })
     }
 
@@ -136,11 +154,9 @@ impl Registry {
         self.cards.get(id).map(|c| c.label.clone())
     }
 
-    /// Forgets whatever `label` was: a card (returning its item id) or the spare.
+    /// Forgets whatever `label` was: a card (returning its item id) or a spare.
     fn release_label(&mut self, label: &str) -> Option<String> {
-        if self.spare.as_deref() == Some(label) {
-            self.spare = None;
-        }
+        self.spares.retain(|s| s != label);
         let id = self.cards.iter().find(|(_, c)| c.label == label).map(|(id, _)| id.clone())?;
         self.cards.remove(&id);
         Some(id)
@@ -207,6 +223,7 @@ pub fn open_window(
 
     // The monitor and cursor queries go to the main thread, so they are made
     // before the lock is taken.
+    let started = std::time::Instant::now();
     let spot = survey(app, saved);
     let reservation = reg().reserve(item_id, |taken| place(&spot, saved, taken))?;
     let Reservation::New { label, geo, from_spare } = reservation else {
@@ -237,6 +254,9 @@ pub fn open_window(
             let _ = win.set_focus();
         }
     }
+    // ~15 ms from a spare, ~300-600 ms built on demand: the number to check
+    // when a pop-out feels slow (CLIPTACK_LOG=cliptack_lib=debug).
+    tracing::debug!(from_spare, ms = started.elapsed().as_millis() as u64, "sticky opened");
     Ok(Opened::New(geo))
 }
 
@@ -260,6 +280,7 @@ fn build(app: &AppHandle, label: &str, item_id: Option<&str>, title: &str) -> Re
         .shadow(true)
         .focused(false)
         .visible(false)
+        .additional_browser_args(BROWSER_ARGS)
         .build()
         .map_err(|e| format!("could not open sticky: {e}"))
 }
@@ -271,7 +292,32 @@ fn present(app: &AppHandle, win: &WebviewWindow, geo: StickyGeometry) {
     let _ = win.set_position(PhysicalPosition::new(geo.x, geo.y));
     capture::apply(win, capture_exclusion(app));
     let _ = win.show();
+    raise(win);
 }
+
+/// Puts a card at the top of the always-on-top band without activating it.
+///
+/// `show` keeps a window where it already sits in the z-order. A spare was
+/// built -- and a card hidden by hide-all was last placed -- before the panel
+/// was shown on top of it, so without this the card came up *behind* the
+/// panel. Async, so it never waits on a main thread that is busy building a
+/// webview.
+#[cfg(windows)]
+fn raise(win: &WebviewWindow) {
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        SetWindowPos, HWND_TOPMOST, SWP_ASYNCWINDOWPOS, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+    };
+    let Ok(h) = win.hwnd() else { return };
+    let flags = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS;
+    let hwnd = HWND(h.0 as *mut std::ffi::c_void);
+    if let Err(e) = unsafe { SetWindowPos(hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0, flags) } {
+        tracing::debug!(error = %e, "could not raise sticky");
+    }
+}
+
+#[cfg(not(windows))]
+fn raise(_win: &WebviewWindow) {}
 
 /// Hands the spare its item. If the spare has gone (it should not have), the
 /// card is built the slow way under the label it was promised.
@@ -305,44 +351,55 @@ pub fn assignment(label: &str) -> Option<String> {
     r.cards.iter().find(|(_, c)| c.label == label).map(|(id, _)| id.clone())
 }
 
-/// Keeps one spare ready, once stickies have been used this session. Called
-/// when the panel hides: building a webview stalls the main thread, and with
-/// the panel down there is nobody waiting on it.
+/// Builds the first spares shortly after launch, so even the first `Ctrl+O`
+/// of a session is instant.
+pub fn warm_up(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(WARM_UP_DELAY).await;
+        ensure_spare(&app);
+    });
+}
+
+/// Tops the pool up to `SPARES`, one window at a time. Called when the panel
+/// hides and at launch: building a webview stalls the main thread, and with
+/// the panel down there is nobody waiting on it. If the panel comes back up
+/// mid-way, the rest wait for its next hide.
 pub fn ensure_spare(app: &AppHandle) {
     {
         let mut r = reg();
-        if !r.used || r.spare.is_some() || r.spare_building || r.cards.len() >= MAX_STICKIES {
+        if r.spare_building || !wants_spare(&r) {
             return;
         }
         r.spare_building = true;
     }
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(SPARE_DELAY).await;
-        // Back up already: building now would stall the panel the user is
-        // looking at. The next hide tries again.
-        let panel_up = window::panel(&app).and_then(|w| w.is_visible().ok()).unwrap_or(false);
-        let built = if panel_up {
-            None
-        } else {
+        loop {
+            tokio::time::sleep(SPARE_DELAY).await;
+            let panel_up = window::panel(&app).and_then(|w| w.is_visible().ok()).unwrap_or(false);
+            if panel_up || !wants_spare(&reg()) {
+                break;
+            }
             let label = reg().new_label();
             match build(&app, &label, None, "Cliptack") {
                 Ok(win) => {
                     capture::apply(&win, capture_exclusion(&app));
-                    Some(label)
+                    reg().spares.push(label);
                 }
                 Err(e) => {
                     tracing::warn!(error = %e, "could not build spare sticky");
-                    None
+                    break;
                 }
             }
-        };
-        let mut r = reg();
-        r.spare_building = false;
-        if built.is_some() {
-            r.spare = built;
         }
+        reg().spare_building = false;
     });
+}
+
+/// Short of spares, and with room for the cards they would become.
+fn wants_spare(r: &Registry) -> bool {
+    r.spares.len() < SPARES && r.cards.len() + r.spares.len() < MAX_STICKIES + SPARES
 }
 
 /// Removes the window. The row in `stickies` is the caller's to delete -- that
@@ -420,7 +477,12 @@ fn set_hidden(app: &AppHandle, hide: bool) -> bool {
     };
     for label in labels {
         if let Some(win) = app.get_webview_window(&label) {
-            let _ = if hide { win.hide() } else { win.show() };
+            if hide {
+                let _ = win.hide();
+            } else {
+                let _ = win.show();
+                raise(&win);
+            }
         }
     }
     tray::set_stickies_label(app, hide);
@@ -685,36 +747,50 @@ mod tests {
     }
 
     #[test]
-    fn the_spare_is_handed_out_once_and_not_counted() {
+    fn each_spare_is_handed_out_once_and_not_counted() {
         let mut r = Registry::default();
-        r.spare = Some(r.new_label());
-        let spare = r.spare.clone();
-        match reserve(&mut r, "a").unwrap() {
-            Reservation::New { label, from_spare, .. } => {
-                assert!(from_spare);
-                assert_eq!(Some(label), spare);
+        let spares = vec![r.new_label(), r.new_label()];
+        r.spares = spares.clone();
+        let mut handed = Vec::new();
+        for id in ["a", "b", "c"] {
+            match reserve(&mut r, id).unwrap() {
+                Reservation::New { label, from_spare, .. } => handed.push((label, from_spare)),
+                Reservation::Existing => panic!(),
             }
-            Reservation::Existing => panic!(),
         }
-        match reserve(&mut r, "b").unwrap() {
-            Reservation::New { label, from_spare, .. } => {
-                assert!(!from_spare);
-                assert_ne!(Some(label), spare, "one window handed to two items");
-            }
-            Reservation::Existing => panic!(),
-        }
-        assert!(r.used);
+        assert!(handed[0].1 && handed[1].1, "the spares were not used first");
+        assert!(!handed[2].1, "a third card claimed a spare that does not exist");
+        let labels: Vec<&String> = handed.iter().map(|(l, _)| l).collect();
+        assert!(spares.iter().all(|s| labels.contains(&s)));
+        assert_ne!(labels[0], labels[1], "one window handed to two items");
+        assert!(r.spares.is_empty());
     }
 
     #[test]
-    fn the_cap_counts_cards_not_the_spare() {
+    fn the_cap_counts_cards_not_spares() {
         let mut r = Registry::default();
         for i in 0..MAX_STICKIES {
             reserve(&mut r, &format!("i{i}")).unwrap();
         }
-        r.spare = Some(r.new_label());
+        let spare = r.new_label();
+        r.spares.push(spare);
         assert!(reserve(&mut r, "one-too-many").is_err());
-        assert!(r.spare.is_some(), "a refused open used up the spare");
+        assert_eq!(r.spares.len(), 1, "a refused open used up a spare");
+    }
+
+    #[test]
+    fn the_pool_stops_at_its_size_and_at_the_cap() {
+        let mut r = Registry::default();
+        assert!(wants_spare(&r));
+        r.spares = (0..SPARES).map(|_| r.new_label()).collect();
+        assert!(!wants_spare(&r), "built past the pool size");
+
+        let mut r = Registry::default();
+        for i in 0..MAX_STICKIES {
+            reserve(&mut r, &format!("i{i}")).unwrap();
+        }
+        r.spares = (0..SPARES).map(|_| r.new_label()).collect();
+        assert!(!wants_spare(&r));
     }
 
     #[test]
@@ -724,10 +800,23 @@ mod tests {
         assert_eq!(r.release_label(&label).as_deref(), Some("a"));
         assert!(r.cards.is_empty());
 
-        r.spare = Some(r.new_label());
-        let spare = r.spare.clone().unwrap();
+        let spare = r.new_label();
+        r.spares.push(spare.clone());
         assert_eq!(r.release_label(&spare), None);
-        assert!(r.spare.is_none());
+        assert!(r.spares.is_empty());
+    }
+
+    /// The panel gets its flags from tauri.conf.json, the cards from
+    /// `BROWSER_ARGS`. If they differ, the first card fails to open at all.
+    #[test]
+    fn the_panel_and_the_cards_use_the_same_webview2_flags() {
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri.conf.json");
+        let panel = conf["app"]["windows"]
+            .as_array()
+            .and_then(|w| w.iter().find(|w| w["label"] == "panel"))
+            .expect("panel window in tauri.conf.json");
+        assert_eq!(panel["additionalBrowserArgs"].as_str(), Some(BROWSER_ARGS));
     }
 
     #[test]

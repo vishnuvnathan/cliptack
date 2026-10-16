@@ -139,6 +139,7 @@ pub fn run() {
             }
 
             sticky::restore_all(handle.clone(), db.clone());
+            sticky::warm_up(&handle);
             clipboard::spawn(handle.clone(), db.clone(), self_copy, capture_gate);
             db::retention::spawn(db);
 
